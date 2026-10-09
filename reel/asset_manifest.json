@@ -1,0 +1,102 @@
+{
+  "project": "XR Universe Studio Hybrid Reel",
+  "cut": "review",
+  "assets": [
+    {
+      "file": "out/XR_Universe_Studio_Hybrid_Reel_1080x1920_CLEAN_notext.mp4",
+      "bytes": 23103925,
+      "sha256": "416ce577140e0028cf4d5418097ab93a21404a67fbbd691f9a9c6298c8b13daf",
+      "status": "qa_passed"
+    },
+    {
+      "file": "out/XR_Universe_Studio_Hybrid_Reel_1080x1920_REVIEW.mp4",
+      "bytes": 23741581,
+      "sha256": "1b016e8066a1b0986f07f8df5e2b89cf285decdc12c102a4e5f3a2900587d4de",
+      "status": "qa_passed"
+    },
+    {
+      "file": "out/XR_Universe_Studio_Hybrid_Reel_1080x1920_REVIEW_silent.mp4",
+      "bytes": 23154435,
+      "sha256": "c9f760b8f17d1bb55eff756e847b2c76932b52d38aba2482778e71cecc4adea7",
+      "status": "qa_passed"
+    },
+    {
+      "file": "out/cover_thumbnail.jpg",
+      "bytes": 64010,
+      "sha256": "f3ffd968d37ded03408fe8b6a2cae1fde0c94b62d351f727b569a8dde3cae3e6",
+      "status": "generated"
+    },
+    {
+      "file": "public/assets/S01_MASTER.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/assets/S02_CLEAN_PHONE.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/assets/S02_MASTER.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/assets/S03_LINES_ISOLATED_RGBA.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/assets/S03_WIREFRAME_END.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/assets/S03_WIREFRAME_START.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/assets/S04_AFTER_INTERACTION.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/assets/S04_BEFORE_INTERACTION.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/assets/S05_OVERLAY_ISOLATED_RGBA.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/assets/S05_REAL_WORLD.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/assets/S06_BACKGROUND.png",
+      "source": "Phase 01 ZIP (image_gen.imagegen)",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/audio/reel_audio.wav",
+      "source": "scripts/make_audio.py (original synthesis)",
+      "license": "own work",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/fonts/Sora-*.ttf",
+      "source": "Google Fonts",
+      "license": "SIL OFL 1.1",
+      "status": "qa_passed"
+    },
+    {
+      "file": "public/brand/logo.png",
+      "status": "blocked",
+      "notes": "official logo not supplied"
+    }
+  ]
+}

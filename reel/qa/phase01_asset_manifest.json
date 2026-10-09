@@ -1,0 +1,822 @@
+{
+  "phase": "01",
+  "approval_scope": "مراجعة داخلية للأصول التصورية، وليست اعتماد العميل أو تحققًا أثريًا",
+  "requested_scene_asset_count": 24,
+  "missing_assets": [],
+  "blocked_assets": [],
+  "assets": [
+    {
+      "filename": "S02_MASTER.png",
+      "path": "02_SCENE_PRODUCT_AR/S02_MASTER.png",
+      "scene": "S02",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S02_MASTER"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "المنتج داخل الشاشة فقط وظل التلامس مقنع. البيئة الداخلية متسقة بصريًا، لكنها ليست إسقاط كاميرا معايرًا هندسيًا. زاوية الهاتف أقرب للأمامية؛ ALT_A يوفر ثلاثة أرباع أوضح."
+      ],
+      "sha256": "86646a3a8016bb8b4c0fab72dd39a602f60489a92e10220c1b04fdda68be20d2"
+    },
+    {
+      "filename": "S01_MASTER.png",
+      "path": "01_SCENE_REAL_WORLD/S01_MASTER.png",
+      "scene": "S01",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S01_MASTER"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "هندسة الهاتف والخامات والظل متماسكة بصريًا؛ انتقاله إلى الوضع القائم في S02 يحتاج قطعًا مقصودًا لا حركة مستمرة."
+      ],
+      "sha256": "2c26b5e8bb8ddc58f71ff7912b3bde1f60b93729e4f70c055f01731b025d7415"
+    },
+    {
+      "filename": "S03_WIREFRAME_START.png",
+      "path": "03_SCENE_WIREFRAME/S03_WIREFRAME_START.png",
+      "scene": "S03",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S03_WIREFRAME_START"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "الشكل متسق مع مكبر الصوت؛ شبكة كثيفة نسبيًا. نسخة STYLE_REFERENCE أخف. مرجع نقطي لا شبكة ثلاثية الأبعاد."
+      ],
+      "sha256": "8e3bf35a59bb2d3058a6bb8dd0f5c878d2f98dcd2f8037d55b1dc1cfaad8026b"
+    },
+    {
+      "filename": "S04_MASTER.png",
+      "path": "04_SCENE_AR_MIRROR/S04_MASTER.png",
+      "scene": "S04",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S04_MASTER"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "الملابس والشعر والإيماءة متسقة بصريًا؛ لا دليل هندسي على مسافة 1.5–2 متر أو معايرة المرآة. ALT_A أنسب لإظهار المسافة. لا تشوه أصابع واضح في الفحص البصري."
+      ],
+      "sha256": "5300ef63e12d12357b05bec9a5e6992c899f0359fe750d472f13a030bf5f00a1"
+    },
+    {
+      "filename": "S06_BACKGROUND.png",
+      "path": "06_SCENE_BRAND_REVEAL/S06_BACKGROUND.png",
+      "scene": "S06",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S06_BACKGROUND"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "المركز خالٍ للشعار الرسمي، والخلفية بلا نص أو علامة مخترعة."
+      ],
+      "sha256": "548377591f7149930086ecb381743548b0f3e48a0d3c691ac14ada2de2498a9a"
+    },
+    {
+      "filename": "S05_REAL_WORLD.png",
+      "path": "05_SCENE_CULTURAL_AR/S05_REAL_WORLD.png",
+      "scene": "S05",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S05_REAL_WORLD"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "تصور مولد مستلهم من أعمدة تدمر وقلعتها؛ لا يُعد صورة وثائقية أو وصفًا محققًا لحالة الموقع الحالية."
+      ],
+      "sha256": "f4cd17171be1da82484b931bfcb22c71f856ec69346f4816f4093d3bbe89534a"
+    },
+    {
+      "filename": "S02_PRODUCT_CUTOUT.png",
+      "path": "02_SCENE_PRODUCT_AR/S02_PRODUCT_CUTOUT.png",
+      "scene": "S02",
+      "dimensions": [
+        1106,
+        1422
+      ],
+      "format": "PNG",
+      "mode": "RGBA",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S02_PRODUCT_CUTOUT"
+      ],
+      "source_dimensions": [
+        1106,
+        1422
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "شفافية RGBA حقيقية. معظم بكسلات الجسم بألفا 252–254، وليست 255 تمامًا؛ اختبر الحواف على خلفية فاتحة قبل تركيب نهائي. ليس قناعًا مطابقًا لبكسلات المنتج في S02."
+      ],
+      "sha256": "5054c98f9b3cbeca5babb17242f397f70358957f3d448312524360482ab297e6",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "fully_transparent_fraction": 0.45675614154223354,
+        "partially_transparent_fraction": 0.5428731659303683
+      }
+    },
+    {
+      "filename": "S01_ALT_A.png",
+      "path": "01_SCENE_REAL_WORLD/S01_ALT_A.png",
+      "scene": "S01",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S01_ALT_A"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "بديل أوسع ومساحة سالبة إضافية."
+      ],
+      "sha256": "6b04ce511102b9207a4560511960c314d1bf6bdadd1fad6c60c4d7ae3c9d83f2"
+    },
+    {
+      "filename": "S02_ALT_A.png",
+      "path": "02_SCENE_PRODUCT_AR/S02_ALT_A.png",
+      "scene": "S02",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S02_ALT_A"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "زاوية ثلاثة أرباع أوضح، مع المحافظة على حصر المنتج داخل الشاشة."
+      ],
+      "sha256": "29a8049db5c9f41eb08e539b60f1ecc448bb73a9c109f8f0d935a3e7370cd6e3"
+    },
+    {
+      "filename": "S01_ALT_B.png",
+      "path": "01_SCENE_REAL_WORLD/S01_ALT_B.png",
+      "scene": "S01",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S01_ALT_B"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "بديل قريب؛ اختبر الحواف مع واجهة إنستغرام عند المونتاج."
+      ],
+      "sha256": "c4119a59c3872e431892509ca67cbb76e109b09718b1daba399294d05ef9b108"
+    },
+    {
+      "filename": "S02_ALT_B.png",
+      "path": "02_SCENE_PRODUCT_AR/S02_ALT_B.png",
+      "scene": "S02",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S02_ALT_B"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "تنويع محدود في حجم المنتج واتجاهه، وليس زوجًا متطابقًا للتحريك."
+      ],
+      "sha256": "9f51dd03f3e2a082ac7ff587d12543af8c61cbe58bcec867049d0a490226fad1"
+    },
+    {
+      "filename": "S03_WIREFRAME_END.png",
+      "path": "03_SCENE_WIREFRAME/S03_WIREFRAME_END.png",
+      "scene": "S03",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S03_WIREFRAME_END"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "مرجع نهاية التحول للشاشة الطولية؛ يلزم بناء التحول إجرائيًا لاحقًا."
+      ],
+      "sha256": "2e6d38fef60ab890f141d708a268e8c82039353aed9f849eb2ac1b17b22b50d9"
+    },
+    {
+      "filename": "S03_STYLE_REFERENCE.png",
+      "path": "03_SCENE_WIREFRAME/S03_STYLE_REFERENCE.png",
+      "scene": "S03",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S03_STYLE_REFERENCE"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "كثافة أقل على الهيكل الخارجي، مع بقاء دوائر المكبر أكثر كثافة."
+      ],
+      "sha256": "308bcd94962b6779d258eb4e9fc578dbeea2128a37af767d357c25a63958497b"
+    },
+    {
+      "filename": "S04_ALT_A.png",
+      "path": "04_SCENE_AR_MIRROR/S04_ALT_A.png",
+      "scene": "S04",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S04_ALT_A"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "تكوين أوسع يوضح المسافة بصورة أفضل؛ الأمتار غير قابلة للتحقق من صورة مولدة."
+      ],
+      "sha256": "df95052b9f0812e9dbc867f93fa8b425b32116ff6eff588e50ba8d31eed9d44e"
+    },
+    {
+      "filename": "S04_ALT_B.png",
+      "path": "04_SCENE_AR_MIRROR/S04_ALT_B.png",
+      "scene": "S04",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S04_ALT_B"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "needs_revision",
+      "notes": [
+        "حافة الشاشة قريبة جدًا من يمين الإطار والشخص مقصوص عند اليسار والأسفل؛ يحتاج إعادة تأطير قبل استخدامه مع واجهة إنستغرام. يفضّل MASTER أو ALT_A."
+      ],
+      "sha256": "3856e8953447bf3e0bf7bb7316794e32c7f9370144ec88a1aa46653cea5b7a39"
+    },
+    {
+      "filename": "S06_ALT_B.png",
+      "path": "06_SCENE_BRAND_REVEAL/S06_ALT_B.png",
+      "scene": "S06",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S06_ALT_B"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "تكوين أكثر اختزالًا مع حافة يسار وحافة سماوية يمينًا."
+      ],
+      "sha256": "363b015780ed961cf0b21d1b5f20e96714b5a54b287128f868cfd971239e3867"
+    },
+    {
+      "filename": "S06_ALT_A.png",
+      "path": "06_SCENE_BRAND_REVEAL/S06_ALT_A.png",
+      "scene": "S06",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S06_ALT_A"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "حافتان سفليتان باتجاه المركز، مع مساحة شعار نظيفة."
+      ],
+      "sha256": "293a9fd5480c861e6afb5d78bc6ea731e0f411f3513687ddae64655567cfea55"
+    },
+    {
+      "filename": "S02_PRODUCT_REFERENCE.png",
+      "path": "02_SCENE_PRODUCT_AR/S02_PRODUCT_REFERENCE.png",
+      "scene": "S02",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S02_PRODUCT_REFERENCE"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "توليد مرجعي ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "مرجع عالي التفاصيل مولد من المنتج؛ توجد فروق طفيفة في النسب والمنظور عن بكسلات المنتج داخل الشاشة."
+      ],
+      "sha256": "bfd105a8a3a992c924b68a98f758a540ecad02431946020241c2edfe6ca91606"
+    },
+    {
+      "filename": "S02_CLEAN_PHONE.png",
+      "path": "02_SCENE_PRODUCT_AR/S02_CLEAN_PHONE.png",
+      "scene": "S02",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S02_MASTER",
+        "S02_CLEAN_PHONE_GENERATED"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "تركيب رقعة إزالة المنتج داخل الشاشة فقط؛ الأصل ثابت خارج القناع، ثم توحيد المقاس",
+      "qa_status": "approved",
+      "notes": [
+        "الحذف محصور برقعة داخل الشاشة. خلفية المنطقة المحذوفة مولدة؛ يلزم تتبع الشاشة عند التحريك."
+      ],
+      "sha256": "239d795294fe8bc3e18573e89ecaec283a098e183f11f7afd90e620e137175b0"
+    },
+    {
+      "filename": "S04_BEFORE_INTERACTION.png",
+      "path": "04_SCENE_AR_MIRROR/S04_BEFORE_INTERACTION.png",
+      "scene": "S04",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S04_MASTER"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "نسخة أصلية مطابقة قبل تفعيل الاختيار",
+      "qa_status": "approved",
+      "notes": [
+        "حالة انتظار مع يد مرفوعة؛ هذه ليست وضعية يد منخفضة."
+      ],
+      "sha256": "5300ef63e12d12357b05bec9a5e6992c899f0359fe750d472f13a030bf5f00a1"
+    },
+    {
+      "filename": "S04_AFTER_INTERACTION.png",
+      "path": "04_SCENE_AR_MIRROR/S04_AFTER_INTERACTION.png",
+      "scene": "S04",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S04_MASTER"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "تركيب حالة اختيار الدائرة العليا داخل الشاشة فقط؛ الشخص والكاميرا ثابتان",
+      "qa_status": "approved",
+      "notes": [
+        "حالة تأكيد اختيار مع بقاء اليد في موضعها؛ تتغير الدائرة فقط. حركة اليد الفعلية مهمة المرحلة الثانية."
+      ],
+      "sha256": "f46146a26a7f40b9b3768145ac17d1798f3f03aa87f6982499508c72ba03d73b"
+    },
+    {
+      "filename": "S05_AR_OVERLAY.png",
+      "path": "05_SCENE_CULTURAL_AR/S05_AR_OVERLAY.png",
+      "scene": "S05",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S05_REAL_WORLD",
+        "S05_AR_GENERATED"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "استخراج الإضافة السماوية من التعديل المرجعي وتركيبها على الأصل؛ لا استبدال للحجر أو الكاميرا",
+      "qa_status": "approved",
+      "notes": [
+        "إضافة محدودة تتبع العمودين والعتب بصريًا. دقة إعادة البناء التاريخية غير موثقة ولا توجد مسوحات هندسية مرجعية."
+      ],
+      "sha256": "22a74407749a9b27a23d3e4074f22d73e092c4a62a7cfdc61c76f9703874dbc8"
+    },
+    {
+      "filename": "S05_MASTER.png",
+      "path": "05_SCENE_CULTURAL_AR/S05_MASTER.png",
+      "scene": "S05",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S05_AR_OVERLAY"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "نسخة مطابقة للإضافة الأثرية المعتمدة تصوريًا",
+      "qa_status": "approved",
+      "notes": [
+        "معتمد للاستخدام التصوري فقط، لا لاعتماد أثري أو توثيق الموقع؛ لا يعكس بالضرورة حالته الحالية."
+      ],
+      "sha256": "22a74407749a9b27a23d3e4074f22d73e092c4a62a7cfdc61c76f9703874dbc8"
+    },
+    {
+      "filename": "S05_WIREFRAME_REFERENCE.png",
+      "path": "05_SCENE_CULTURAL_AR/S05_WIREFRAME_REFERENCE.png",
+      "scene": "S05",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGB",
+      "generation_provider": "OpenAI image_gen.imagegen",
+      "model": null,
+      "seed": null,
+      "source_ids": [
+        "S05_AR_GENERATED"
+      ],
+      "source_dimensions": [
+        941,
+        1672
+      ],
+      "processing": "مرجع نقطي لخطوط الإضافة المعزولة على خلفية داكنة؛ ليس نموذجًا ثلاثي الأبعاد",
+      "qa_status": "approved",
+      "notes": [
+        "خطوط نقطية مستخرجة من المرجع المولد، وليست CAD أو قياسات أثرية."
+      ],
+      "sha256": "331c86418920303f8ae6704ed506b612d89fcf7f2ed78076d26d02bc639fb777"
+    },
+    {
+      "filename": "S03_LINES_ISOLATED_RGBA.png",
+      "path": "03_SCENE_WIREFRAME/S03_LINES_ISOLATED_RGBA.png",
+      "scene": "S03",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGBA",
+      "generation_provider": "OpenAI image_gen.imagegen + controlled compositing",
+      "qa_status": "approved",
+      "optional": true,
+      "notes": [
+        "عنصر نقطي معزول بألفا حقيقية؛ ليس مجسمًا ثلاثي الأبعاد.",
+        "عزل لوني للخطوط الساطعة؛ قد تتطلب نقاط التقاء الخطوط تنظيفًا عند التكبير، وليس مسارًا متجهيًا."
+      ],
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "fully_transparent_fraction": 0.8929523533950617
+      },
+      "sha256": "b477f1e26fb20778f459ee32058deb10ac29a3347b61142fc5723172af4443de"
+    },
+    {
+      "filename": "S05_OVERLAY_ISOLATED_RGBA.png",
+      "path": "05_SCENE_CULTURAL_AR/S05_OVERLAY_ISOLATED_RGBA.png",
+      "scene": "S05",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "format": "PNG",
+      "mode": "RGBA",
+      "generation_provider": "OpenAI image_gen.imagegen + controlled compositing",
+      "qa_status": "approved",
+      "optional": true,
+      "notes": [
+        "عنصر نقطي معزول بألفا حقيقية؛ ليس مجسمًا ثلاثي الأبعاد."
+      ],
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "fully_transparent_fraction": 0.9752874228395062
+      },
+      "sha256": "8c6591c5dcfefc9567d013d19038d76478608aefa25e4da924848de439dc6496"
+    },
+    {
+      "filename": "visual_style_guide.md",
+      "path": "00_ART_DIRECTION/visual_style_guide.md",
+      "scene": null,
+      "dimensions": null,
+      "format": "MD",
+      "generation_provider": null,
+      "qa_status": "approved",
+      "notes": []
+    },
+    {
+      "filename": "color_palette.json",
+      "path": "00_ART_DIRECTION/color_palette.json",
+      "scene": null,
+      "dimensions": null,
+      "format": "JSON",
+      "generation_provider": null,
+      "qa_status": "approved",
+      "notes": []
+    },
+    {
+      "filename": "production_notes.md",
+      "path": "00_ART_DIRECTION/production_notes.md",
+      "scene": null,
+      "dimensions": null,
+      "format": "MD",
+      "generation_provider": null,
+      "qa_status": "approved",
+      "notes": []
+    },
+    {
+      "filename": "image_generation_prompts.md",
+      "path": "07_PROMPTS/image_generation_prompts.md",
+      "scene": null,
+      "dimensions": null,
+      "format": "MD",
+      "generation_provider": null,
+      "qa_status": "approved",
+      "notes": []
+    },
+    {
+      "filename": "generation_parameters.json",
+      "path": "07_PROMPTS/generation_parameters.json",
+      "scene": null,
+      "dimensions": null,
+      "format": "JSON",
+      "generation_provider": null,
+      "qa_status": "approved",
+      "notes": []
+    },
+    {
+      "filename": "quality_report.md",
+      "path": "08_QA/quality_report.md",
+      "scene": null,
+      "dimensions": null,
+      "format": "MD",
+      "generation_provider": null,
+      "qa_status": "approved",
+      "notes": []
+    },
+    {
+      "filename": "asset_manifest.json",
+      "path": "08_QA/asset_manifest.json",
+      "scene": null,
+      "dimensions": null,
+      "format": "JSON",
+      "generation_provider": null,
+      "qa_status": "approved",
+      "notes": []
+    },
+    {
+      "filename": "contact_sheet.png",
+      "path": "08_QA/contact_sheet.png",
+      "scene": null,
+      "dimensions": [
+        1440,
+        2014
+      ],
+      "format": "PNG",
+      "generation_provider": "local composition",
+      "qa_status": "approved",
+      "notes": []
+    },
+    {
+      "filename": "storyboard_preview.html",
+      "path": "09_PREVIEW/storyboard_preview.html",
+      "scene": null,
+      "dimensions": null,
+      "format": "HTML",
+      "generation_provider": null,
+      "qa_status": "approved",
+      "notes": [
+        "الملف موجود وروابطه سليمة؛ تعذر اختبار المتصفح بسبب قيود البيئة."
+      ]
+    },
+    {
+      "filename": "storyboard_preview.png",
+      "path": "09_PREVIEW/storyboard_preview.png",
+      "scene": null,
+      "dimensions": [
+        1560,
+        2610
+      ],
+      "format": "PNG",
+      "generation_provider": "local composition",
+      "qa_status": "approved",
+      "notes": [
+        "معاينة ثابتة مركبة من الصور المولدة فعليًا."
+      ]
+    }
+  ]
+}
