@@ -2,3 +2,9 @@ node_modules/
 reel/node_modules/
 *.log
 .DS_Store
+reel3d/parts/
+reel3d/stills/
+reel3d/_wrap.html
+reel3d/log*.txt
+reel3d/chk.jpg
+reel3d/sheet.jpg
