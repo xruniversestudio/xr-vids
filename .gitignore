@@ -13,3 +13,11 @@ reel25d/stills/
 reel25d/_wrap.html
 reel25d/log*.txt
 reel25d/sheet.jpg
+ar-pro/parts/
+ar-pro/stills/
+ar-pro/_wrap_*.html
+ar-pro/log_*.txt
+ar-pro/run_all.log
+ar-pro/sheet_*.jpg
+ar-pro/chk.jpg
+ar-pro/node_modules/

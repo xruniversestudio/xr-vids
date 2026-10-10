@@ -1,0 +1,26 @@
+<canvas id="c" width="1500" height="1000"></canvas>
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
+r.toneMapping = THREE.ACESFilmicToneMapping; r.setScissorTest(true);
+const pm = new THREE.PMREMGenerator(r);
+const names = ['ChronographWatch', 'GlamVelvetSofa', 'SheenChair', 'SciFiHelmet', 'CarConcept', 'IridescenceLamp'];
+const info = {};
+const L = new GLTFLoader();
+for (let i = 0; i < names.length; i++) {
+  const g = await L.loadAsync(`/models/${names[i]}.glb`);
+  const s = new THREE.Scene(); s.background = new THREE.Color(0x1a1830); s.environment = pm.fromScene(new RoomEnvironment(r), .04).texture;
+  const o = g.scene; s.add(o);
+  const box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  info[names[i]] = { size: size.toArray().map(v => +v.toFixed(3)), center: c.toArray().map(v => +v.toFixed(3)) };
+  const cam = new THREE.PerspectiveCamera(35, 1.5, .01, 1000); const R = size.length();
+  cam.position.copy(c).add(new THREE.Vector3(R * .9, R * .5, R * 1.1)); cam.lookAt(c);
+  const x = (i % 3) * 500, y = Math.floor(i / 3) * 500;
+  r.setViewport(x, 1000 - y - 500, 500, 500); r.setScissor(x, 1000 - y - 500, 500, 500); cam.aspect = 1; cam.updateProjectionMatrix();
+  r.render(s, cam);
+}
+window.INFO = info; window.READY = true;
+</script>
