@@ -1,20 +1,24 @@
 # XR Universe Studio — صور إضافية (النسخة 2)
 
-هالمرة بدنا **3 صور بس**، وكلها لنفس "الموديل": **رأس مانيكان ثلاثي الأبعاد**، أنيق ولامع، ومن دون إنسان حقيقي. منستخدمه حتى تصير التجربة الافتراضية مفهومة وواقعية: الأغراض بتنلبس على الرأس **جوّا شاشة المرآة وشاشة الموبايل**، بدل ما تطير قدّام الشاشة.
+هالمرة بدنا **5 صور**، وكلها لنفس "الموديل": **مانيكان أزياء ثلاثي الأبعاد بجسم كامل**، أنيق ولامع، ومن دون إنسان حقيقي. منستخدمه حتى تصير تجربة اللبس الافتراضية مفهومة وواقعية: الملابس والإكسسوارات بتتبدل على المانيكان **جوّا شاشة المرآة وشاشة الموبايل**، بدل ما تطير قدّام الشاشة.
 
 ---
 
 ## قبل ما تبلّش (مهم)
 
-1. **الاتساق أهم شي:** لازم يكون الرأس نفسه بالصور الثلاث، بنفس الوضعية ونفس الإطار. هيك بقدر أعمل انتقال سلس من "بدون أغراض" لـ"مع أغراض".
+1. **الاتساق أهم شي:** لازم يكون المانيكان نفسه بكل الصور، بنفس الوقفة ونفس الإطار. هيك بقدر أعمل انتقال سلس بين الإطلالات، متل ما بيصير بمرآة حقيقية.
    - **الطريقة الأفضل:** ولّد **A01** أول شي. بعدين استخدم ميزة **تعديل الصورة** (Edit) على A01 نفسها، لتطلع A02 وA03 منها.
-   - هالميزة موجودة بـChatGPT وGPT-Image، وبـMidjourney اسمها Vary Region، وبأدوات تانية اسمها Inpaint.
-   - إذا ولّدتها من الصفر بيتغير الرأس والزاوية، وما بيزبط الانتقال.
+   - كمان ولّد **A04** أول شي، واعمل **A05** بالتعديل عليها.
+   - ميزة التعديل موجودة بـChatGPT وGPT-Image، وبـMidjourney اسمها Vary Region، وبأدوات تانية اسمها Inpaint.
 2. **الخلفية:** شفافة (PNG). وإذا الأداة ما بتدعمها، خليها سوداء صافية.
-3. **المقاس:** 3:4 عمودي، وعلى الأقل 1536×2048.
-4. **الإطار:** الرأس والرقبة وبداية الكتفين، والوجه للأمام تماماً وبنص الصورة. اتركي فراغ صغير فوق الرأس، حتى يكون في محل لأذنين الأرنب والتاج بـA03.
-5. **ممنوع:** نصوص، أو شعارات، أو علامات تجارية، أو إنسان حقيقي.
+3. **الإطار:**
+   - **A01 لـA03:** جسم كامل من الراس للقدمين، واقف للأمام بنص الصورة، مع فراغ صغير فوق الراس وتحت القدمين. شاشة المرآة طويلة وضيقة، فلا تخلي الأيدين مفتوحة لبعيد.
+   - **A04 وA05:** لقطة قريبة للوجه والكتفين، متل كاميرا سيلفي.
+4. **المقاس:** 9:16 عمودي لكل الصور، وعلى الأقل 1152×2048.
+5. **ممنوع:** نصوص، أو شعارات، أو علامات تجارية على الملابس، أو إنسان حقيقي.
 6. **التسليم:** سمّيها بالأسماء المكتوبة جنبها، وابعتيها هون أو ارفعيها على `studio-ad/images/`.
+
+> **ملاحظة:** كتبت المانيكان بقوام نسائي، لأنه الأشهر بعرض الأزياء. إذا بدك قوام رجالي أو حيادي، غيّري كلمة `female-form` بالبرومبتات لـ`male-form` أو `gender-neutral`. ونفس الشي إذا بدك تغيري الملابس.
 
 ### بصمة الأسلوب (نفس صور النسخة 1)
 ```
@@ -25,27 +29,45 @@ subtle rim light, clean modern tech aesthetic, octane render, high detail, sharp
 
 ---
 
-### A01 — رأس المانيكان بدون أغراض · `A01_bust_bare.png`
-**المقاس:** 3:4 · **خلفية:** شفافة
-> رأس مانيكان لؤلؤي لامع، ملامحه منحوتة ناعمة، وعيونه مسكّرة بهدوء. من غير شعر، والوجه للأمام. هاد "الموديل" الأساسي اللي منبني عليه الصورتين التانيتين.
+## المرآة (جسم كامل)
+
+### A01 — المانيكان بلبس أساسي · `A01_body_base.png`
+**المقاس:** 9:16 · **خلفية:** شفافة
+> مانيكان لؤلؤي لامع، وجهه بملامح منحوتة ناعمة من غير شعر. لابس لبس أساسي بسيط بلون كريمي: بلوزة ضيقة وبنطلون. هاد "الموديل" الأساسي اللي منبني عليه الإطلالات.
 ```
-a sleek stylized mannequin head and shoulders bust, front view, perfectly centered and symmetrical, facing the camera straight on, smooth glossy pearl-white surface with subtle iridescent violet and cyan sheen, elegant softly sculpted facial features, gently closed eyes, neutral calm expression, no hair, bald smooth head, slim neck, top of the shoulders visible, empty space above the head, premium 3D render, soft studio lighting, glossy satin and iridescent glass materials, color palette deep violet #5B3F8F, cyan #4FC3E0, magenta #E2367A, warm cream #F8EDE0, subtle rim light, clean modern tech aesthetic, octane render, high detail, sharp focus, isolated on a transparent background
+a sleek stylized female-form fashion mannequin, full body from head to feet, standing straight facing the camera, perfectly centered, arms relaxed close to the body, smooth glossy pearl-white surface with subtle iridescent violet and cyan sheen, elegant softly sculpted face with gently closed eyes, no hair, bald smooth head, wearing a simple fitted warm-cream long-sleeve top and slim cream trousers with minimal white sneakers, small empty space above the head and below the feet, premium 3D render, soft studio lighting, glossy satin and iridescent glass materials, color palette deep violet #5B3F8F, cyan #4FC3E0, magenta #E2367A, warm cream #F8EDE0, subtle rim light, clean modern tech aesthetic, octane render, high detail, sharp focus, isolated on a transparent background
 ```
 
-### A02 — نفس الرأس لابس طاقية ونظارة وأحمر شفاه · `A02_bust_tryon.png`
-**المقاس:** 3:4 · **خلفية:** شفافة · **الطريقة:** تعديل على A01
-> الأغراض نفسها اللي بصورة M02: طاقية بنفسجي لامعة، ونظارة شمسية شفافة بإطار زهري وعدسات متدرجة، وأحمر شفاه فوشيا على الشفاه. منستخدمها جوّا شاشة المرآة وجوّا شاشة الموبايل.
+### A02 — إطلالة 1: ستريت ستايل · `A02_body_outfit1.png`
+**المقاس:** 9:16 · **خلفية:** شفافة · **الطريقة:** تعديل على A01
+> نفس المانيكان لابس جاكيت بومبر بنفسجي لامع، والطاقية والنظارة متل اللي بصورة M02. هيك بترتبط بقائمة الأغراض جوّا المرآة.
 ```
-edit this image: keep the exact same mannequin bust, same pose, same framing, same lighting and background. Add: a glossy iridescent purple baseball cap worn naturally on the head, translucent pink-violet cat-eye sunglasses with gradient purple lenses and small gold details worn on the face, and glossy magenta lipstick on the lips. The items must fit the head realistically with correct scale, contact shadows and reflections. premium 3D render, same style
+edit this image: keep the exact same mannequin, same pose, same framing, same lighting and background. Change the outfit to: a glossy iridescent violet satin bomber jacket over a cream t-shirt, slim black cargo trousers, chunky white-and-cyan sneakers, a glossy iridescent purple baseball cap, translucent pink-violet cat-eye sunglasses with gradient purple lenses, and glossy magenta lipstick. Clothes fit the body realistically with natural folds, correct scale and contact shadows. No logos. premium 3D render, same style
 ```
-**إذا بدك تولّديها من الصفر** (ولو إنه مش مفضّل)، استعملي برومبت A01 كامل، وزيدي عليه بعد `no hair,` هالجملة:
-`wearing a glossy iridescent purple baseball cap, translucent pink-violet cat-eye sunglasses with gradient purple lenses, glossy magenta lipstick,`
 
-### A03 — نفس الرأس مع فلتر أذنين أرنب · `A03_bust_filter.png`
-**المقاس:** 3:4 · **خلفية:** شفافة · **الطريقة:** تعديل على A01
-> فلتر مرح متل فلاتر سناب شات: أذنين أرنب لؤلؤية، وتاج ذهبي صغير، ونظارة على شكل قلوب، ونجوم وقلوب لامعة صغيرة طايرة حوالين الرأس.
+### A03 — إطلالة 2: سهرة · `A03_body_outfit2.png`
+**المقاس:** 9:16 · **خلفية:** شفافة · **الطريقة:** تعديل على A01
+> نفس المانيكان لابس فستان سهرة طويل من الساتان الفوشيا، مع حلق وشنطة صغيرة. منستعملها حتى نبيّن تبديل الإطلالة بلمسة.
 ```
-edit this image: keep the exact same mannequin bust, same pose, same framing, same lighting and background. Add a playful augmented-reality face filter: tall iridescent pearl bunny ears on a purple headband with small bows, a small rose-gold crown with heart gems on top of the head, heart-shaped rose-gold sunglasses with pink-purple gradient lenses worn on the face, and a few small glossy 3D stars and hearts floating around the head in cyan, magenta and cream. Everything fits the head with correct scale and soft glow. premium 3D render, same style
+edit this image: keep the exact same mannequin, same pose, same framing, same lighting and background. Change the outfit to: an elegant floor-length magenta-to-violet satin evening gown with a soft drape, delicate rose-gold drop earrings, and a small iridescent cream clutch bag held in one hand. The dress fits the body realistically with natural satin folds and highlights. No logos. premium 3D render, same style
+```
+
+---
+
+## الفلاتر (لقطة سيلفي قريبة)
+
+### A04 — وجه المانيكان قريب · `A04_face_bare.png`
+**المقاس:** 9:16 · **خلفية:** شفافة
+> نفس المانيكان بلقطة قريبة متل كاميرا السيلفي: الوجه والرقبة وبداية الكتفين، مع فراغ فوق الراس منحط فيه أذنين الفلتر.
+```
+close-up selfie-style portrait of the same sleek stylized female-form fashion mannequin, head neck and top of the shoulders, facing the camera straight on, centered, smooth glossy pearl-white surface with subtle iridescent violet and cyan sheen, elegant softly sculpted face with gently closed eyes, calm expression, no hair, bald smooth head, wearing the collar of a simple cream top, generous empty space above the head, premium 3D render, soft studio lighting, glossy satin and iridescent glass materials, color palette deep violet #5B3F8F, cyan #4FC3E0, magenta #E2367A, warm cream #F8EDE0, subtle rim light, clean modern tech aesthetic, octane render, high detail, sharp focus, isolated on a transparent background
+```
+
+### A05 — نفس الوجه مع فلتر أذنين أرنب · `A05_face_filter.png`
+**المقاس:** 9:16 · **خلفية:** شفافة · **الطريقة:** تعديل على A04
+> فلتر مرح متل فلاتر سناب شات: أذنين أرنب لؤلؤية، وتاج صغير، ونظارة قلوب، ونجوم وقلوب لامعة طايرة حوالين الراس.
+```
+edit this image: keep the exact same mannequin face, same pose, same framing, same lighting and background. Add a playful augmented-reality face filter: tall iridescent pearl bunny ears on a purple headband with small bows, a small rose-gold crown with heart gems on top of the head, heart-shaped rose-gold sunglasses with pink-purple gradient lenses worn on the face, and a few small glossy 3D stars and hearts floating around the head in cyan, magenta and cream. Everything fits the head with correct scale and soft glow. premium 3D render, same style
 ```
 
 ---
@@ -54,6 +76,6 @@ edit this image: keep the exact same mannequin bust, same pose, same framing, sa
 
 | المشهد | قبل | بعد |
 |---|---|---|
-| **3 — مرآة الواقع المعزز** | الأغراض بتطير قدّام الشاشة | جوّا شاشة المرآة بيبيّن A01، وشبكة تتبع الوجه بتمسح عليه. بتطلع قائمة أغراض صغيرة جوّا واجهة المرآة (من M02)، ولما ينختار الغرض بيصير A02 كأنه انلبس فعلاً. بعدين بيدخل موبايل جنب المرآة عليه نفس التجربة، وبيطلع نص «بالمتجر أو من موبايلك». |
-| **5 — الفلاتر** | الأذنين والتاج على شاشة فاضية | جوّا شاشة السيلفي بيبيّن A01 مع شبكة تتبع، والفلتر بينطبق ← A03. |
+| **3 — مرآة الواقع المعزز** | الأغراض بتطير قدّام الشاشة | جوّا شاشة المرآة بيوقف المانيكان بلبسه الأساسي (A01)، وبتمسح عليه شبكة تتبع الجسم. بتطلع قائمة إطلالات صغيرة جوّا واجهة المرآة، ولما تنختار وحدة بيتبدل لبسه بمسحة ضوئية ← A02 ← A03. بعدين بيدخل موبايل جنب المرآة عليه نفس التجربة، وبيطلع نص «بالمتجر أو من موبايلك». |
+| **5 — الفلاتر** | الأذنين والتاج على شاشة فاضية | جوّا شاشة السيلفي بيبيّن الوجه (A04) مع نقاط تتبع الوجه، والفلتر بينطبق ← A05. |
 | **1 — المنتجات (من غير صور جديدة)** | العطر بيطلع من الشاشة لبرا | جوّا شاشة الموبايل بيبيّن منظر الكاميرا للأرضية، وعليه مؤشر تموضع AR، وبعدين بيتحط العطر عليه. |
