@@ -1,0 +1,385 @@
+<title>XR Universe Reel 2.5D</title>
+<style>
+/* Render stage: one 9:16 canvas. Brand tokens from the Phase 01 palette (provisional). */
+:root{ --midnight:#080C12; --cyan:#54D8F2; --ice:#E9F1F6; color-scheme:dark; }
+@font-face{font-family:"Sora";src:url("fonts/Sora-400.ttf");font-weight:400}
+@font-face{font-family:"Sora";src:url("fonts/Sora-600.ttf");font-weight:600}
+@font-face{font-family:"Sora";src:url("fonts/Sora-800.ttf");font-weight:800}
+@font-face{font-family:"JBM";src:url("fonts/JetBrainsMono-500.ttf");font-weight:500}
+@font-face{font-family:"JBM";src:url("fonts/JetBrainsMono-700.ttf");font-weight:700}
+html,body{margin:0;background:var(--midnight)}
+canvas{display:block}
+</style>
+<canvas id="out" width="1080" height="1920"></canvas>
+<script>
+/* ======================================================================
+   XR Universe Studio — "Beyond the Ordinary" · 2.5D cut
+   Phase 01 plates + hand-guided depth maps → parallax camera in a shader,
+   then a motion-graphics layer on a 2D canvas. Every value is a function of t.
+   ====================================================================== */
+const W = 1080, H = 1920, FPS = 30, DUR = 24, BEAT = .5;
+const C = { mid: '#080C12', cyan: '#54D8F2', ice: '#E9F1F6', sand: '#F2C58A' };
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const pr = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, k) => a + (b - a) * k;
+const eo = x => 1 - Math.pow(1 - x, 3);
+const eo5 = x => 1 - Math.pow(1 - x, 5);
+const eio = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const eob = x => { const c1 = 1.7, c3 = c1 + 1; return x <= 0 ? 0 : 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const rgba = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+const pulse = (t, at, len = .2) => t >= at && t < at + len ? Math.pow(1 - (t - at) / len, 2) : 0;
+
+/* ---------------- WebGL plate renderer ---------------- */
+const glc = document.createElement('canvas'); glc.width = W; glc.height = H;
+const gl = glc.getContext('webgl2', { preserveDrawingBuffer: true, premultipliedAlpha: false, alpha: false });
+const VS = `#version 300 es
+in vec2 p; out vec2 v; void main(){ v = p * .5 + .5; v.y = 1. - v.y; gl_Position = vec4(p, 0., 1.); }`;
+const FS = `#version 300 es
+precision highp float;
+uniform sampler2D img, dep; uniform vec2 res;
+uniform float Z, D, F, alpha, ca, expo, flash, reveal, sat;
+uniform vec2 P, T, A, blur; uniform vec4 clip; uniform float radial, revealUp;
+in vec2 v; out vec4 o;
+vec2 srcOf(vec2 s){
+  vec2 q = P + (s - T) / Z;
+  for (int i = 0; i < 3; i++) { float d = texture(dep, q / res).r; float k = Z * (1. + D * (d - F)); q = P + (s - T - A * (d - F)) / k; }
+  return q;
+}
+vec4 tap(vec2 s){
+  vec2 q = srcOf(s); vec4 c = texture(img, q / res);
+  if (clip.z > 0.) { // patch: only inside its rectangle, revealed top-down
+    vec2 e = min(q - clip.xy, clip.zw - q); float m = clamp(min(e.x, e.y) / 4., 0., 1.);
+    m *= revealUp > .5 ? clamp((q.y - reveal) / 3., 0., 1.) : clamp((reveal - q.y) / 3., 0., 1.); c.a *= m;
+  }
+  return c;
+}
+void main(){
+  vec2 s = v * res; vec2 dir = s - res * .5; float r = length(dir); dir = r > 0. ? dir / r : vec2(0.);
+  vec4 acc = vec4(0.); float n = 0.;
+  for (int i = 0; i < 7; i++) {
+    float f = float(i) / 6. - .5;
+    vec2 sp = s + blur * f + dir * radial * f * (r / 900.);
+    vec4 cg = tap(sp);
+    vec4 cr = ca > .01 ? tap(sp + dir * ca * (r / 900.)) : cg;
+    vec4 cb = ca > .01 ? tap(sp - dir * ca * (r / 900.)) : cg;
+    acc += vec4(cr.r, cg.g, cb.b, cg.a); n += 1.;
+    if (length(blur) < .5 && radial < .5) break;
+  }
+  vec4 c = acc / n;
+  float l = dot(c.rgb, vec3(.299, .587, .114)); c.rgb = mix(vec3(l), c.rgb, sat);
+  c.rgb = c.rgb * expo + flash;
+  o = vec4(c.rgb, c.a * alpha);
+}`;
+function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog);
+const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+const U = {}; ['img', 'dep', 'res', 'Z', 'D', 'F', 'alpha', 'ca', 'expo', 'flash', 'reveal', 'sat', 'P', 'T', 'A', 'blur', 'clip', 'radial', 'revealUp'].forEach(k => U[k] = gl.getUniformLocation(prog, k));
+gl.uniform1i(U.img, 0); gl.uniform1i(U.dep, 1); gl.uniform2f(U.res, W, H);
+gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+function tex(img) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; }
+
+const PLATES = ['S01_ALT_A', 'S01_MASTER', 'S01_ALT_B', 'S02_CLEAN_PHONE', 'S02_MASTER', 'S02_ALT_A', 'S02_PRODUCT_REFERENCE', 'S03_WIREFRAME_START', 'S03_WIREFRAME_END', 'S04_ALT_A', 'S04_BEFORE_INTERACTION', 'S04_AFTER_INTERACTION', 'S05_REAL_WORLD', 'S05_OVERLAY_ISOLATED_RGBA', 'S05_AR_OVERLAY', 'S06_ALT_A', 'S06_BACKGROUND'];
+const DEPTHS = ['S01_ALT_A', 'S01_MASTER', 'S01_ALT_B', 'S02_CLEAN_PHONE', 'S02_MASTER', 'S02_ALT_A', 'S02_PRODUCT_REFERENCE', 'S04_ALT_A', 'S04_BEFORE_INTERACTION', 'S05_REAL_WORLD'];
+const TX = {}, DX = {}, DPIX = {};
+let FLAT;
+const load = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+
+/* camera: Z zoom, D dolly strength, F focal depth, P pivot (plate px), T where the pivot lands (screen px), A parallax (px per depth unit) */
+function draw(name, depth, cam, o = {}) {
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, TX[name]);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, depth ? DX[depth] : FLAT);
+  gl.uniform1f(U.Z, cam.Z); gl.uniform1f(U.D, cam.D ?? .3); gl.uniform1f(U.F, cam.F ?? .45);
+  gl.uniform2f(U.P, ...cam.P); gl.uniform2f(U.T, ...(cam.T || cam.P)); gl.uniform2f(U.A, ...(cam.A || [0, 0]));
+  gl.uniform1f(U.alpha, o.alpha ?? 1); gl.uniform1f(U.ca, o.ca ?? 0); gl.uniform1f(U.expo, o.expo ?? 1); gl.uniform1f(U.flash, o.flash ?? 0);
+  gl.uniform1f(U.sat, o.sat ?? 1); gl.uniform2f(U.blur, ...(o.blur || [0, 0])); gl.uniform1f(U.radial, o.radial ?? 0);
+  const cl = o.clip || [0, 0, -1, -1]; gl.uniform4f(U.clip, ...cl); gl.uniform1f(U.reveal, o.reveal ?? 99999); gl.uniform1f(U.revealUp, o.up ? 1 : 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+/* forward map plate px → screen px, for anchoring graphics to the image */
+function proj(cam, x, y, depth) {
+  const d = depth && DPIX[depth] ? DPIX[depth](x, y) : .45, F = cam.F ?? .45, k = cam.Z * (1 + (cam.D ?? .3) * (d - F)), A = cam.A || [0, 0], T = cam.T || cam.P;
+  return [T[0] + (x - cam.P[0]) * k + A[0] * (d - F), T[1] + (y - cam.P[1]) * k + A[1] * (d - F), k];
+}
+const mixCam = (a, b, k) => ({ Z: lerp(a.Z, b.Z, k), D: lerp(a.D ?? .3, b.D ?? .3, k), F: a.F ?? .45, P: [lerp(a.P[0], b.P[0], k), lerp(a.P[1], b.P[1], k)], T: [lerp((a.T || a.P)[0], (b.T || b.P)[0], k), lerp((a.T || a.P)[1], (b.T || b.P)[1], k)], A: [lerp((a.A || [0, 0])[0], (b.A || [0, 0])[0], k), lerp((a.A || [0, 0])[1], (b.A || [0, 0])[1], k)] });
+
+/* ---------------- shot list ---------------- */
+/* each shot: plate, depth, time range, start/end camera; cut FX are applied around t0 */
+const S = (plate, depth, t0, t1, a, b, extra = {}) => ({ plate, depth, t0, t1, a, b, ...extra });
+const SHOTS = [
+  S('S01_ALT_A', 'S01_ALT_A', 0, 1, { Z: 1.16, P: [540, 1030], A: [70, 10], D: .35 }, { Z: 1.26, P: [540, 1030], A: [-60, -10], D: .35 }),
+  S('S01_MASTER', 'S01_MASTER', 1, 2, { Z: 1.12, P: [540, 990], A: [0, 60], D: .45 }, { Z: 1.3, P: [540, 990], A: [0, -40], D: .45 }),
+  S('S01_ALT_B', 'S01_ALT_B', 2, 3, { Z: 1.1, P: [520, 1090], A: [-50, 0], D: .4 }, { Z: 1.55, P: [520, 1090], A: [40, 0], D: .4 }, { ease: x => x * x }),
+  S('S02_CLEAN_PHONE', 'S02_CLEAN_PHONE', 3, 5.9, { Z: 1.1, P: [540, 960], T: [540, 1010], A: [60, 0], D: .4 }, { Z: 1.38, P: [557, 950], T: [540, 1060], A: [-50, 0], D: .4 }, { patch: true }),
+  S('S02_ALT_A', 'S02_ALT_A', 5.9, 6.9, { Z: 1.14, P: [579, 970], T: [540, 1050], A: [-90, 0], D: .5 }, { Z: 1.26, P: [579, 970], T: [540, 1050], A: [80, 0], D: .5 }),
+  S('S02_PRODUCT_REFERENCE', 'S02_PRODUCT_REFERENCE', 6.9, 8, { Z: 1.08, P: [552, 980], T: [540, 1060], A: [0, 40], D: .45 }, { Z: 1.45, P: [552, 980], T: [540, 1060], A: [0, -40], D: .45 }, { ease: x => x * x }),
+  S('S03_WIREFRAME_START', null, 8, 9, { Z: 1.22, P: [551, 922], T: [500, 1000] }, { Z: 1.08, P: [551, 922], T: [520, 990] }),
+  S('S03_WIREFRAME_END', null, 9, 10, { Z: 1.1, P: [590, 864], T: [540, 930] }, { Z: 1.03, P: [590, 864], T: [540, 960] }),
+  S('S04_ALT_A', 'S04_ALT_A', 10, 11.2, { Z: 1.12, P: [540, 960], T: [540, 1010], A: [80, 0], D: .5 }, { Z: 1.2, P: [540, 960], T: [540, 1010], A: [-70, 0], D: .5 }),
+  S('S04_BEFORE_INTERACTION', 'S04_BEFORE_INTERACTION', 11.2, 13.7, { Z: 1.12, P: [560, 900], T: [540, 1000], A: [-24, 0], D: .3 }, { Z: 1.24, P: [600, 800], T: [540, 980], A: [20, 0], D: .3 }, { after: 12.6 }),
+  S('S04_AFTER_INTERACTION', 'S04_BEFORE_INTERACTION', 13.7, 15, { Z: 1.24, P: [600, 800], T: [540, 980], A: [20, 0], D: .3 }, { Z: 2.6, P: [700, 760], T: [540, 960], A: [0, 0], D: .3 }, { ease: x => x * x * x }),
+  S('S05_REAL_WORLD', 'S05_REAL_WORLD', 15, 18.7, { Z: 1.24, P: [460, 900], T: [540, 960], A: [-60, 0], D: .3 }, { Z: 1.34, P: [400, 800], T: [540, 960], A: [60, -10], D: .3 }, { overlay: [16.4, 18.0] }),
+  S('S05_AR_OVERLAY', 'S05_REAL_WORLD', 18.7, 20, { Z: 1.42, P: [370, 640], T: [540, 1000], A: [24, 0], D: .3 }, { Z: 1.62, P: [370, 600], T: [540, 1000], A: [-24, 0], D: .3 }),
+  S('S06_ALT_A', null, 20, 21, { Z: 1.25, P: [540, 960] }, { Z: 1.1, P: [540, 960] }),
+  S('S06_BACKGROUND', null, 21, 24, { Z: 1.12, P: [540, 960] }, { Z: 1.03, P: [540, 960] }),
+];
+const CUTS = [1, 2, 5.9, 6.9, 9, 11.2, 13.7, 18.7, 21];       // hard cuts: flash + punch + aberration
+const WHIPS = [3, 8, 10, 15, 20];                            // section changes: motion blur + flash
+const shotAt = t => SHOTS.find(s => t >= s.t0 && t < s.t1) || SHOTS[SHOTS.length - 1];
+const camOf = (s, t) => { const k = (s.ease || eio)(pr(t, s.t0, s.t1)); return mixCam(s.a, s.b, k); };
+
+function render3D(t) {
+  const s = shotAt(t); let cam = camOf(s, t);
+  // cut energy
+  let punch = 0, ca = 0, flash = 0, blur = [0, 0], radial = 0;
+  for (const c of CUTS) { const p = pulse(t, c, .28); punch = Math.max(punch, p); ca = Math.max(ca, 16 * p); flash = Math.max(flash, .22 * pulse(t, c, .12)); }
+  for (const w of WHIPS) { const d = (t - w) / .16; if (Math.abs(d) < 1) { const k = 1 - Math.abs(d); blur = [0, (d < 0 ? -1 : 1) * 260 * k * k]; ca = Math.max(ca, 22 * k); flash = Math.max(flash, .35 * k * k); if (w === 8 || w === 15) { radial = 160 * k; blur = [0, 0]; } } }
+  for (const b of [4.0, 12.6]) { ca = Math.max(ca, 14 * pulse(t, b, .3)); flash = Math.max(flash, .3 * pulse(t, b, .1)); }
+  // beat bounce on the groove sections (subtle)
+  const groove = (t >= 3 && t < 8) || (t >= 10 && t < 20);
+  const beatK = groove ? Math.pow(1 - ((t / BEAT) % 1), 6) : 0;
+  cam = { ...cam, Z: cam.Z * (1 + .035 * punch + .006 * beatK) };
+  gl.clearColor(.03, .047, .07, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  const fx = { ca, flash, blur, radial };
+  draw(s.plate, s.depth, cam, fx);
+  if (s.patch) { const r = eio(pr(t, 3.75, 4.05)); if (r > 0) draw('S02_MASTER', s.depth, cam, { ...fx, clip: [316, 689, 783, 1315], reveal: lerp(689, 1315, r) }); }
+  if (s.after && t >= s.after) draw('S04_AFTER_INTERACTION', s.depth, cam, fx);
+  if (s.overlay) { const r = eio(pr(t, s.overlay[0], s.overlay[1])); if (r > 0) draw('S05_OVERLAY_ISOLATED_RGBA', s.depth, cam, { ...fx, clip: [0, 0, W, H], reveal: lerp(1240, 180, r), up: true }); }
+  return { s, cam };
+}
+
+/* ---------------- 2D motion-graphics layer ---------------- */
+const out = document.getElementById('out'), ctx = out.getContext('2d');
+const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H; const tctx = tmp.getContext('2d');
+const grain = document.createElement('canvas'); grain.width = grain.height = 512;
+{ const g = grain.getContext('2d'), im = g.createImageData(512, 512); let s = 7; for (let i = 0; i < im.data.length; i += 4) { s = (s * 16807) % 2147483647; const v = s % 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; } g.putImageData(im, 0, 0); }
+const F = (w, s, fam = 'Sora') => { ctx.font = `${w} ${s}px ${fam}`; };
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function brackets(x0, y0, x1, y1, L, col = C.cyan, lw = 4, a = 1) {
+  ctx.save(); ctx.globalAlpha *= a; ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.shadowColor = col; ctx.shadowBlur = 12;
+  for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) { ctx.beginPath(); ctx.moveTo(x, y + sy * L); ctx.lineTo(x, y); ctx.lineTo(x + sx * L, y); ctx.stroke(); }
+  ctx.restore();
+}
+function tag(x, y, text, k, col = C.cyan, align = 'left') {
+  if (k <= 0) return; F(700, 22, 'JBM'); ctx.letterSpacing = '2px'; const w = ctx.measureText(text).width + 28;
+  const bx = align === 'left' ? x : x - w; ctx.save(); ctx.globalAlpha = k;
+  ctx.beginPath(); ctx.rect(bx, y - 22, w * eo(k), 44); ctx.clip();
+  rr(bx, y - 22, w, 44, 6); ctx.fillStyle = 'rgba(8,12,18,.78)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = C.ice; ctx.textAlign = 'left'; ctx.fillText(text, bx + 14, y + 8); ctx.restore(); ctx.letterSpacing = '0px';
+}
+function leader(x0, y0, x1, y1, k, col = C.cyan) {
+  if (k <= 0) return; ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.shadowColor = col; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(lerp(x0, x1, eo(k)), lerp(y0, y1, eo(k))); ctx.stroke();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x0, y0, 6, 0, 7); ctx.fill(); ctx.restore();
+}
+/* slam headline: big word scales down into place, line two slides up from a mask */
+function slam(t, a, b, big, small, y, size, opt = {}) {
+  if (t < a || t > b) return;
+  const out_ = pr(t, b - .22, b), k = pr(t, a, a + .32), e = eo5(k);
+  ctx.save(); ctx.textAlign = 'center'; ctx.globalAlpha = 1 - out_;
+  F(800, size); ctx.letterSpacing = `${opt.track ?? -2}px`;
+  const sc = lerp(1.35, 1, e);
+  ctx.translate(W / 2, y); ctx.scale(sc, sc);
+  ctx.globalAlpha *= clamp(k * 3);
+  if (opt.outline) { ctx.strokeStyle = C.ice; ctx.lineWidth = 3; ctx.strokeText(big, 0, 0); }
+  ctx.shadowColor = 'rgba(8,12,18,.55)'; ctx.shadowBlur = 30;
+  const gr = ctx.createLinearGradient(-400, 0, 400, 0); gr.addColorStop(0, C.ice); gr.addColorStop(1, opt.accent || C.cyan);
+  ctx.fillStyle = opt.outline ? 'rgba(0,0,0,0)' : gr; if (!opt.outline) ctx.fillText(big, 0, 0);
+  ctx.restore();
+  if (small) {
+    const k2 = eo(pr(t, a + .18, a + .55)); F(600, opt.smallSize || 50); ctx.letterSpacing = '1px';
+    ctx.save(); ctx.globalAlpha = 1 - out_; ctx.beginPath(); ctx.rect(0, y + 14, W, 90); ctx.clip();
+    ctx.textAlign = 'center'; ctx.fillStyle = C.ice; ctx.shadowColor = 'rgba(8,12,18,.6)'; ctx.shadowBlur = 20;
+    ctx.fillText(small, W / 2, y + 74 + (1 - k2) * 80); ctx.restore();
+    const k3 = eo(pr(t, a + .3, a + .7)); ctx.fillStyle = C.cyan; ctx.globalAlpha = 1 - out_; ctx.fillRect(W / 2 - 60 * k3, y + 112, 120 * k3, 5); ctx.globalAlpha = 1;
+  }
+  ctx.letterSpacing = '0px';
+}
+function label(t, a, b, text, y) { // small service label above a headline
+  if (t < a || t > b) return; const k = eo(pr(t, a, a + .3)) * (1 - pr(t, b - .2, b));
+  F(700, 22, 'JBM'); ctx.letterSpacing = '6px'; ctx.textAlign = 'center'; ctx.fillStyle = rgba(C.cyan, k); ctx.fillText(text, W / 2, y); ctx.letterSpacing = '0px';
+}
+
+function hud(t, s) {
+  const m = 46; ctx.save(); ctx.strokeStyle = rgba(C.ice, .5); ctx.lineWidth = 2;
+  for (const [x, y, sx, sy] of [[m, 120, 1, 1], [W - m, 120, -1, 1], [m, H - 260, 1, -1], [W - m, H - 260, -1, -1]]) { ctx.beginPath(); ctx.moveTo(x, y + sy * 44); ctx.lineTo(x, y); ctx.lineTo(x + sx * 44, y); ctx.stroke(); }
+  F(500, 18, 'JBM'); ctx.letterSpacing = '3px'; ctx.fillStyle = rgba(C.ice, .7); ctx.textAlign = 'left';
+  ctx.fillStyle = Math.floor(t / BEAT) % 2 ? '#ff3b5c' : 'rgba(255,59,92,.3)'; ctx.beginPath(); ctx.arc(m + 22, 152, 6, 0, 7); ctx.fill();
+  ctx.fillStyle = rgba(C.ice, .7); ctx.fillText('XR UNIVERSE STUDIO', m + 38, 158);
+  ctx.textAlign = 'right'; const f = Math.floor(t * FPS); ctx.fillText(`${String(Math.floor(t)).padStart(2, '0')}:${String(f % 30).padStart(2, '0')}`, W - m - 16, 158);
+  // section progress
+  const secs = [[0, 3], [3, 8], [8, 10], [10, 15], [15, 20], [20, 24]], x0 = 350, x1 = 730, y = H - 290, sw = (x1 - x0) / 6;
+  secs.forEach(([a, b], i) => { ctx.fillStyle = rgba(C.ice, .2); ctx.fillRect(x0 + i * sw + 3, y, sw - 6, 3); ctx.fillStyle = C.cyan; ctx.fillRect(x0 + i * sw + 3, y, (sw - 6) * pr(t, a, b), 3); });
+  ctx.restore(); ctx.letterSpacing = '0px';
+}
+
+/* per-section graphics anchored to the plates */
+function graphics(t, s, cam) {
+  /* S01 — the ordinary phone */
+  if (t < 3) {
+    if (s.plate === 'S01_ALT_B') { // screen wakes: light blooms out of the glass
+      const k = pr(t, 2.45, 3.0), [x, y] = proj(cam, 520, 1085, s.depth);
+      if (k > 0) { const g = ctx.createRadialGradient(x, y, 10, x, y, lerp(120, 1400, eio(k))); g.addColorStop(0, rgba(C.ice, .95 * k)); g.addColorStop(.3, rgba(C.cyan, .55 * k)); g.addColorStop(1, rgba(C.cyan, 0)); ctx.fillStyle = g; ctx.globalCompositeOperation = 'screen'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; }
+    }
+    slam(t, .08, .98, 'WHAT IF', null, 420, 168);
+    slam(t, 1.04, 1.98, 'REALITY', null, 420, 168, { outline: true });
+    slam(t, 2.04, 2.96, 'COULD DO', 'more?', 400, 150, { smallSize: 64 });
+  }
+  /* S02 — AR product inside the phone */
+  if (t >= 3 && t < 8) {
+    if (s.plate === 'S02_CLEAN_PHONE') {
+      const scr = [292, 367, 788, 1382];
+      const [ax, ay] = proj(cam, scr[0], scr[1], s.depth), [bx, by] = proj(cam, scr[2], scr[3], s.depth);
+      // scanning: sweeping line + floor dot lattice inside the phone screen
+      const ks = pr(t, 3.1, 3.8);
+      if (t < 4.05) {
+        ctx.save(); ctx.beginPath(); ctx.rect(ax, ay, bx - ax, by - ay); ctx.clip();
+        const sy = lerp(ay, by, frac2(ks * 1.6)); const g = ctx.createLinearGradient(0, sy - 120, 0, sy); g.addColorStop(0, rgba(C.cyan, 0)); g.addColorStop(1, rgba(C.cyan, .35));
+        ctx.fillStyle = g; ctx.fillRect(ax, sy - 120, bx - ax, 120); ctx.fillStyle = C.cyan; ctx.fillRect(ax, sy - 2, bx - ax, 3);
+        for (let i = 0; i < 9; i++) for (let j = 0; j < 7; j++) { // perspective lattice on the virtual floor
+          const u = (j - 3) / 3, v = i / 8, px = lerp(557 + u * 110, 557 + u * 260, v), py = lerp(1090, 1300, v * v); const [x, y] = proj(cam, px, py, s.depth);
+          const kk = clamp(ks * 12 - (i + Math.abs(j - 3))); if (kk > 0) { ctx.fillStyle = rgba(C.cyan, .9 * kk); ctx.fillRect(x - 3, y - 3, 6, 6); }
+        }
+        ctx.restore();
+        tag(ax + 24, ay + 60, t < 3.8 ? 'SCANNING SURFACE' : 'SURFACE LOCKED', eo(pr(t, 3.1, 3.3)));
+      }
+      // product bracket snaps on, then measurement callouts
+      const P0 = proj(cam, 400, 752, s.depth), P1 = proj(cam, 713, 1160, s.depth);
+      const kb = eob(pr(t, 3.95, 4.25));
+      if (kb > 0) { const ex = lerp(80, 0, clamp(kb)); brackets(P0[0] - 14 - ex, P0[1] - 14 - ex, P1[0] + 14 + ex, P1[1] + 14 + ex, 46, C.cyan, 4, clamp(kb)); }
+      const km = eo(pr(t, 4.4, 4.8));
+      if (km > 0) {
+        ctx.save(); ctx.strokeStyle = C.ice; ctx.lineWidth = 2; ctx.globalAlpha = km;
+        const yb = P1[1] + 40; ctx.beginPath(); ctx.moveTo(P0[0], yb); ctx.lineTo(lerp(P0[0], P1[0], km), yb); ctx.stroke();
+        for (const x of [P0[0], P1[0]]) { ctx.beginPath(); ctx.moveTo(x, yb - 10); ctx.lineTo(x, yb + 10); ctx.stroke(); }
+        const xr = P1[0] + 40; ctx.beginPath(); ctx.moveTo(xr, P1[1]); ctx.lineTo(xr, lerp(P1[1], P0[1], km)); ctx.stroke();
+        ctx.restore();
+        tag((P0[0] + P1[0]) / 2 - 60, P1[1] + 84, '34 CM', km); tag(xr + 16, (P0[1] + P1[1]) / 2, '52 CM', eo(pr(t, 4.55, 4.9)));
+        tag(P0[0] - 10, P0[1] - 70, 'STUDIO MONITOR · 3D', eo(pr(t, 4.7, 5.1)));
+      }
+    }
+    if (s.plate === 'S02_ALT_A') { // 360° orbit ring around the product
+      const [x, y, k] = proj(cam, 579, 1080, s.depth), kk = eo(pr(t, 5.9, 6.2));
+      ctx.save(); ctx.strokeStyle = C.cyan; ctx.lineWidth = 4; ctx.shadowColor = C.cyan; ctx.shadowBlur = 14; ctx.globalAlpha = kk;
+      ctx.beginPath(); ctx.ellipse(x, y, 190 * k, 46 * k, 0, Math.PI * (.1 + (t - 5.9) * 2), Math.PI * (1.7 + (t - 5.9) * 2)); ctx.stroke(); ctx.restore();
+      tag(x + 120 * k, y - 300 * k, '360° VIEW', kk);
+    }
+    if (s.plate === 'S02_PRODUCT_REFERENCE') { // spec readout on the hero
+      const [x, y] = proj(cam, 855, 700, s.depth); leader(x - 40, y + 40, x + 40, y - 40, eo(pr(t, 7.0, 7.25)));
+      tag(x + 40, y - 40, 'TAP · ROTATE · PLACE', eo(pr(t, 7.1, 7.4)));
+    }
+    label(t, 4.4, 7.85, '01 · AR / WEBAR PRODUCTS', 300);
+    slam(t, 4.42, 7.85, 'PRODUCTS', 'you can explore.', 440, 150);
+  }
+  /* S03 — wireframe becomes a display */
+  if (t >= 8 && t < 10) {
+    const k = eio(pr(t, 8.3, 9.6));
+    const a = { l: 227, t: 480, r: 713, b: 1365, dx: 162, dy: -18 }, b = { l: 302, t: 238, r: 821, b: 1490, dx: 54, dy: -20 };
+    const box = Object.fromEntries(Object.keys(a).map(key => [key, lerp(a[key], b[key], k)]));
+    const camW = camOf(s, t); const p0 = proj(camW, box.l, box.t, null), p1 = proj(camW, box.r, box.b, null), sc = p0[2];
+    ctx.save(); ctx.strokeStyle = C.cyan; ctx.shadowColor = C.cyan; ctx.shadowBlur = 16; ctx.lineWidth = 3; ctx.globalAlpha = .9 * (1 - pr(t, 9.7, 10));
+    ctx.strokeRect(p0[0], p0[1], p1[0] - p0[0], p1[1] - p0[1]);
+    ctx.beginPath(); ctx.moveTo(p1[0], p0[1]); ctx.lineTo(p1[0] + box.dx * sc, p0[1] + box.dy * sc); ctx.lineTo(p1[0] + box.dx * sc, p1[1] + box.dy * sc); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+    ctx.lineWidth = 1; ctx.globalAlpha *= .5; for (let i = 1; i < 8; i++) { const y = lerp(p0[1], p1[1], i / 8); ctx.beginPath(); ctx.moveTo(p0[0], y); ctx.lineTo(p1[0], y); ctx.stroke(); }
+    ctx.restore();
+    F(700, 26, 'JBM'); ctx.letterSpacing = '4px'; ctx.textAlign = 'center'; ctx.fillStyle = rgba(C.ice, .85);
+    ctx.fillText(k < .5 ? 'PRODUCT' : 'EXPERIENCE', W / 2, 1640); ctx.letterSpacing = '0px';
+    ctx.fillStyle = C.cyan; ctx.fillRect(W / 2 - 150, 1660, 300 * k, 3);
+  }
+  /* S04 — AR mirror */
+  if (t >= 10 && t < 15) {
+    if (s.plate === 'S04_ALT_A') { const [ax, ay] = proj(cam, 560, 459, s.depth), [bx, by] = proj(cam, 910, 1240, s.depth); brackets(ax, ay, bx, by, 40, C.cyan, 3, eo(pr(t, 10.2, 10.5))); tag(ax, ay - 40, 'AR MIRROR · LIVE', eo(pr(t, 10.3, 10.6))); }
+    if (s.plate === 'S04_BEFORE_INTERACTION') {
+      const pts = [[248, 470], [324, 626], [410, 648], [486, 572], [300, 900], [290, 1300]], J = pts.map(p => proj(cam, p[0], p[1], s.depth));
+      const kt = eo(pr(t, 11.35, 11.8));
+      ctx.save(); ctx.globalAlpha = kt; ctx.strokeStyle = rgba(C.cyan, .8); ctx.lineWidth = 2;
+      ctx.beginPath(); [[0, 1], [1, 2], [2, 3], [1, 4], [4, 5]].forEach(([i, j]) => { ctx.moveTo(J[i][0], J[i][1]); ctx.lineTo(J[j][0], J[j][1]); }); ctx.stroke();
+      J.forEach(([x, y]) => { ctx.fillStyle = C.cyan; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); ctx.strokeStyle = C.ice; ctx.beginPath(); ctx.arc(x, y, 12, 0, 7); ctx.stroke(); });
+      ctx.restore();
+      tag(J[3][0] - 40, J[3][1] - 70, 'GESTURE TRACKED', eo(pr(t, 11.7, 12.0)), C.cyan, 'right');
+      const [dx, dy, dk] = proj(cam, 611, 594, s.depth);
+      if (t < 12.6) { const h = pr(t, 12.2, 12.6); ctx.save(); ctx.strokeStyle = C.ice; ctx.lineWidth = 3; ctx.globalAlpha = h; ctx.beginPath(); ctx.arc(dx, dy, lerp(60, 30, h) * dk, 0, 7); ctx.stroke(); ctx.restore(); }
+      else { const r = pr(t, 12.6, 13.3); ctx.save(); ctx.strokeStyle = C.cyan; ctx.shadowColor = C.cyan; ctx.shadowBlur = 20; ctx.lineWidth = 5; ctx.globalAlpha = 1 - r; ctx.beginPath(); ctx.arc(dx, dy, lerp(30, 220, eo(r)) * dk, 0, 7); ctx.stroke(); ctx.restore(); tag(dx + 50, dy - 10, 'SELECTED', eob(pr(t, 12.6, 12.9))); }
+    }
+    label(t, 10.7, 14.6, '02 · INTERACTIVE EXPERIENCES', 300);
+    slam(t, 10.72, 14.6, 'EXPERIENCES', 'you can control.', 440, 118);
+  }
+  /* S05 — cultural storytelling */
+  if (t >= 15 && t < 20) {
+    const g = ctx.createLinearGradient(0, 0, 0, 760); g.addColorStop(0, 'rgba(8,12,18,.75)'); g.addColorStop(1, 'rgba(8,12,18,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 760);
+    if (s.plate === 'S05_REAL_WORLD') {
+      // terrain scan lines sweep the ground before the reconstruction rises
+      const ks = pr(t, 15.4, 16.6);
+      if (ks > 0 && ks < 1) { ctx.save(); for (let i = 0; i < 10; i++) { const v = (i / 10 + ks) % 1, py = lerp(1000, 1900, v * v); const [x0, y0] = proj(cam, 0, py, s.depth), [x1] = proj(cam, W, py, s.depth); ctx.strokeStyle = rgba(C.cyan, .5 * (1 - Math.abs(v - .5) * 1.6)); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.stroke(); } ctx.restore(); }
+      const [x, y] = proj(cam, 640, 1060, s.depth); tag(x, y, '34.55°N  38.27°E · PALMYRA', eo(pr(t, 15.5, 15.8)), C.cyan, 'right');
+    }
+    if (s.plate === 'S05_AR_OVERLAY') { const [x, y] = proj(cam, 560, 230, s.depth); leader(x + 30, y + 30, x - 50, y - 50, eo(pr(t, 18.8, 19.05))); tag(x - 50, y - 50, 'CONCEPT RECONSTRUCTION', eo(pr(t, 18.9, 19.2)), C.cyan, 'right'); }
+    label(t, 15.4, 19.75, '03 · CULTURAL STORYTELLING', 300);
+    slam(t, 15.42, 19.75, 'STORIES', 'you can experience.', 440, 150, { accent: C.sand });
+  }
+  /* S06 — brand frame */
+  if (t >= 20) {
+    const k = eo5(pr(t, 20.1, 20.9)), cx = W / 2, cy = 820, w = 520, h = 240;
+    ctx.save(); ctx.strokeStyle = C.cyan; ctx.shadowColor = C.cyan; ctx.shadowBlur = 18; ctx.lineWidth = 3;
+    const ox = lerp(700, 0, k), oy = lerp(500, 0, k);
+    ctx.beginPath(); ctx.moveTo(cx - w / 2 - ox, cy - h / 2 - oy); ctx.lineTo(cx + w / 2 - ox, cy - h / 2 - oy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - w / 2 + ox, cy + h / 2 + oy); ctx.lineTo(cx + w / 2 + ox, cy + h / 2 + oy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - w / 2 - oy, cy - h / 2 + ox); ctx.lineTo(cx - w / 2 - oy, cy + h / 2 + ox); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + w / 2 + oy, cy - h / 2 - ox); ctx.lineTo(cx + w / 2 + oy, cy + h / 2 - ox); ctx.stroke();
+    ctx.restore();
+    const kl = eo(pr(t, 20.9, 21.4));
+    if (kl > 0) {
+      ctx.save(); ctx.globalAlpha = kl;
+      if (LOGO) ctx.drawImage(LOGO, cx - w / 2 + 20, cy - h / 2 + 20, w - 40, h - 40);
+      else { ctx.setLineDash([12, 10]); ctx.strokeStyle = rgba(C.ice, .45); ctx.lineWidth = 2; rr(cx - w / 2 + 24, cy - h / 2 + 24, w - 48, h - 48, 12); ctx.stroke(); ctx.setLineDash([]); F(500, 20, 'JBM'); ctx.letterSpacing = '6px'; ctx.textAlign = 'center'; ctx.fillStyle = rgba(C.ice, .55); ctx.fillText('OFFICIAL LOGO', cx, cy + 7); ctx.letterSpacing = '0px'; }
+      ctx.restore();
+    }
+    const lines = [['WE CREATE', 21.2], ['INTERACTIVE', 21.45], ['REALITIES.', 21.7]];
+    lines.forEach(([txt, a], i) => {
+      const kk = eo5(pr(t, a, a + .4)); if (kk <= 0) return;
+      ctx.save(); F(800, i === 1 ? 104 : 96); ctx.letterSpacing = '-1px'; ctx.textAlign = 'center';
+      const y = 1110 + i * 112; ctx.beginPath(); ctx.rect(0, y - 100, W, 120); ctx.clip();
+      ctx.fillStyle = i === 1 ? C.cyan : C.ice; ctx.shadowColor = i === 1 ? C.cyan : 'transparent'; ctx.shadowBlur = i === 1 ? 24 : 0;
+      ctx.fillText(txt, W / 2, y + (1 - kk) * 120); ctx.restore();
+    });
+    ctx.letterSpacing = '0px';
+  }
+}
+const frac2 = x => x - Math.floor(x);
+
+let LOGO = null;
+function renderAt(t) {
+  t = clamp(t, 0, DUR - 1e-4);
+  const { s, cam } = render3D(t);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.letterSpacing = '0px';
+  ctx.drawImage(glc, 0, 0);
+  // S05 scan line + reveal edge
+  if (s.overlay) {
+    const r = eio(pr(t, s.overlay[0], s.overlay[1]));
+    if (r > 0 && r < 1) { const [, ys] = proj(cam, 370, lerp(1240, 180, r), s.depth); ctx.save(); ctx.fillStyle = C.cyan; ctx.shadowColor = C.cyan; ctx.shadowBlur = 24; ctx.fillRect(0, ys - 2, W, 4); const g = ctx.createLinearGradient(0, ys, 0, ys + 160); g.addColorStop(0, rgba(C.cyan, .3)); g.addColorStop(1, rgba(C.cyan, 0)); ctx.fillStyle = g; ctx.fillRect(0, ys, W, 160); ctx.restore(); }
+  }
+  graphics(t, s, cam);
+  hud(t, s);
+  // glitch slices on the big hits
+  const gk = Math.max(pulse(t, 4.0, .14), pulse(t, 9.0, .14), pulse(t, 12.6, .12), pulse(t, 20.0, .12));
+  if (gk > 0) { tctx.clearRect(0, 0, W, H); tctx.drawImage(out, 0, 0); const n = 9; for (let i = 0; i < n; i++) { const y = (i * 211 + Math.floor(t * 90) * 37) % H, h = 30 + (i * 53) % 90, dx = ((i % 2 ? 1 : -1) * (30 + (i * 29) % 70)) * gk; ctx.drawImage(tmp, 0, y, W, h, dx, y, W, h); } }
+  // grain + vignette
+  ctx.globalAlpha = .05; ctx.globalCompositeOperation = 'overlay'; const gi = Math.floor(t * FPS); ctx.drawImage(grain, -(gi * 67 % 512), -(gi * 131 % 512), W + 1024, H + 1024); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  const vg = ctx.createRadialGradient(W / 2, H / 2, H * .32, W / 2, H / 2, H * .78); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+}
+window.renderAt = renderAt;
+
+(async () => {
+  await Promise.all(['800 100px Sora', '600 50px Sora', '500 20px JBM', '700 20px JBM'].map(f => document.fonts.load(f)));
+  const flat = new Uint8Array([115, 115, 115, 255]); FLAT = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, FLAT); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, flat);
+  await Promise.all(PLATES.map(async n => { TX[n] = tex(await load(`plates/${n}.png`)); }));
+  await Promise.all(DEPTHS.map(async n => {
+    const im = await load(`depth/${n}.png`); DX[n] = tex(im);
+    const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data;
+    DPIX[n] = (x, y) => { const i = (Math.min(c.height - 1, Math.max(0, Math.round(y / 2))) * c.width + Math.min(c.width - 1, Math.max(0, Math.round(x / 2)))) * 4; return d[i] / 255; };
+  }));
+  const src = new URLSearchParams(location.search).get('logo');
+  if (src) { try { LOGO = await load(src); } catch (e) { LOGO = null; } }
+  window.READY = true;
+})();
+</script>
