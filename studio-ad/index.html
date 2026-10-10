@@ -1,0 +1,154 @@
+<title>XR Universe Ribbons</title>
+<style>
+/* Render stage. Palette from the XR Universe Studio logo. */
+@font-face{font-family:"Cairo";src:url("fonts/Cairo-400.ttf");font-weight:400}
+@font-face{font-family:"Cairo";src:url("fonts/Cairo-700.ttf");font-weight:700}
+@font-face{font-family:"Cairo";src:url("fonts/Cairo-900.ttf");font-weight:900}
+@font-face{font-family:"JBM";src:url("fonts/JetBrainsMono-500.ttf");font-weight:500}
+html,body{margin:0;background:#0d0b1d}
+canvas{display:block}
+</style>
+<canvas id="c"></canvas>
+<script type="importmap">{"imports":{"three":"THREE_BASE/build/three.module.js","three/addons/":"THREE_BASE/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ======================================================================
+   Brand ribbons — satin bands that echo the XR logo's folded strips.
+   Ribbon demo: three bands sweep in, braid around the centre, the mark
+   resolves in their middle, then a ribbon wipe carries us to the next scene.
+   ====================================================================== */
+const QS = new URLSearchParams(location.search), VERT = QS.get('fmt') === 'v';
+const W = VERT ? 1080 : 1920, H = VERT ? 1920 : 1080, DUR = 6;
+const C = { bg: '#0d0b1d', ink: '#F4EEFA', dim: '#A69FC2', cyan: '#4FC3E0', mag: '#E2367A', violet: '#7B57C8', purple: '#5B3F8F', deep: '#3B2A6B' };
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const pr = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, k) => a + (b - a) * k;
+const eo = x => 1 - Math.pow(1 - x, 3);
+const eo5 = x => 1 - Math.pow(1 - x, 5);
+const eio = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const rgba = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+
+const out = document.getElementById('c'); out.width = W; out.height = H; const ctx = out.getContext('2d');
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H, false);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .9;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(C.bg); scene.fog = new THREE.Fog(C.bg, 12, 30);
+const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), .04).texture;
+const camera = new THREE.PerspectiveCamera(VERT ? 46 : 34, W / H, .05, 200);
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType, samples: 4 }));
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(W / 2, H / 2), .35, .5, 1.0));
+composer.addPass(new OutputPass());
+
+scene.add(new THREE.HemisphereLight(0xc9b8ff, 0x0c0a16, .45));
+const key = new THREE.DirectionalLight(0xffffff, 2.0); key.position.set(4, 7, 6); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: .5, far: 30 }); key.shadow.bias = -.0005; scene.add(key);
+const rimC = new THREE.PointLight(0x4fc3e0, 14, 12, 2); rimC.position.set(-3.5, 3.5, -4); scene.add(rimC);
+const rimM = new THREE.PointLight(0xe2367a, 12, 12, 2); rimM.position.set(3.5, 2.5, -4); scene.add(rimM);
+
+const floor = new THREE.Mesh(new THREE.CircleGeometry(40, 96), new THREE.MeshStandardMaterial({ color: 0x110e20, roughness: .35, metalness: .2, envMapIntensity: .3 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+/* ---------------- ribbon geometry ----------------
+   A band of width w swept along a Catmull-Rom curve. The band twists around the
+   tangent (turns), tapers at both ends, and carries a two-colour gradient. Indices
+   run head-to-tail, so drawing a prefix "grows" the ribbon along its path. */
+function ribbonGeometry(points, { width = .34, turns = 1.2, segs = 600, cA, cB, thick = .018 }) {
+  const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
+  const fr = curve.computeFrenetFrames(segs, false), pos = [], nor = [], col = [], idx = [];
+  const A = new THREE.Color(cA), B = new THREE.Color(cB), tmp = new THREE.Color();
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs, p = curve.getPointAt(t), T = fr.tangents[i], N = fr.normals[i], Bn = fr.binormals[i];
+    const a = turns * t * Math.PI * 2, side = N.clone().multiplyScalar(Math.cos(a)).add(Bn.clone().multiplyScalar(Math.sin(a)));
+    const face = new THREE.Vector3().crossVectors(T, side).normalize();
+    const taper = Math.min(1, t / .06, (1 - t) / .06), w = width * (.15 + .85 * Math.sqrt(Math.max(0, taper)));
+    tmp.copy(A).lerp(B, eio(t));
+    for (const [s, f] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) { // front pair, back pair (thin slab)
+      const v = p.clone().addScaledVector(side, s * w / 2).addScaledVector(face, f * thick / 2);
+      pos.push(v.x, v.y, v.z); nor.push(face.x * f, face.y * f, face.z * f); col.push(tmp.r, tmp.g, tmp.b);
+    }
+    if (i < segs) { const o = i * 4, n = o + 4; idx.push(o, n, o + 1, o + 1, n, n + 1, o + 2, o + 3, n + 2, o + 3, n + 3, n + 2, o, o + 2, n, o + 2, n + 2, n, o + 1, n + 1, o + 3, o + 3, n + 1, n + 3); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals(); g.userData = { segs, per: 24, curve };
+  return g;
+}
+const satin = (env = .45) => new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: .34, metalness: 0, clearcoat: .7, clearcoatRoughness: .18, envMapIntensity: env, side: THREE.DoubleSide });
+class Ribbon {
+  constructor(points, opts) { this.geo = ribbonGeometry(points, opts); this.mesh = new THREE.Mesh(this.geo, satin(opts.env)); this.mesh.castShadow = true; this.mesh.receiveShadow = true; scene.add(this.mesh); }
+  /* show the band between tail and head (0..1 along its length) */
+  show(tail, head) {
+    const { segs, per } = this.geo.userData, a = Math.floor(clamp(tail) * segs), b = Math.floor(clamp(head) * segs);
+    this.mesh.visible = b > a; this.geo.setDrawRange(a * per, Math.max(0, b - a) * per);
+  }
+}
+
+/* three braided paths around the centre (y≈1.5); hand-placed control points, no randomness */
+const CY = 1.5;
+/* each band makes one wide sweep: in from off-frame, around behind the mark, back in front below it, and out */
+const R1 = new Ribbon([V3(-8, -.5, 3), V3(-3.2, .9, 1.6), V3(-2.2, 2.6, -.6), V3(0, 3.25, -1.6), V3(2.3, 2.7, -.8), V3(2.6, 1.3, .9), V3(.6, .45, 1.9), V3(-2.4, .8, 1.4), V3(-6, 2.4, -2)], { cA: '#3B2470', cB: '#8A5BD6', width: .42, turns: .9 });
+const R2 = new Ribbon([V3(8, 3.6, 2), V3(3.4, 2.4, 1.2), V3(2.4, .9, -1.2), V3(0, .35, -2.0), V3(-2.4, 1.2, -1.2), V3(-2.7, 2.6, .6), V3(-1, 3.0, 1.8), V3(2, 2.3, 2.2), V3(6, .3, -1)], { cA: '#2BB7E0', cB: '#1A6FA8', width: .36, turns: -.8 });
+const R3 = new Ribbon([V3(-7, 3.8, -1), V3(-3.4, 2.2, -.4), V3(-1.8, .2, 1.0), V3(.6, -.05, 1.6), V3(2.8, .7, .4), V3(3.4, 2.1, -1.4), V3(1.4, 3.4, -2.6), V3(-2, 3.9, -2.4), V3(-7, 2, -4)], { cA: '#E2367A', cB: '#7A3AA6', width: .32, turns: 1.0 });
+/* wipe ribbon: a wide band that sweeps across the frame for scene changes */
+const WIPE = new Ribbon([V3(-9, -2, 2.5), V3(-4, 1, 3.0), V3(0, 2, 3.2), V3(4, 3, 3.0), V3(9, 6, 2.5)], { cA: '#8E1F5E', cB: '#1F5E9E', width: 3.6, turns: .35, segs: 300, thick: .03, env: .12 });
+
+/* the mark, as stacked layers for a machined edge */
+let LOGO;
+function buildLogo(tex) {
+  const asp = tex.image.width / tex.image.height, w = VERT ? 1.7 : 1.5, h = w / asp; LOGO = new THREE.Group(); scene.add(LOGO);
+  for (let i = 6; i >= 0; i--) { const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: .45, roughness: .3, metalness: .2, color: i ? new THREE.Color().setScalar(.3) : 0xffffff, emissive: i ? 0 : 0xffffff, emissiveMap: i ? null : tex, emissiveIntensity: i ? 0 : .12, side: THREE.DoubleSide }); const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); p.position.z = -i * .012; LOGO.add(p); }
+}
+
+function update(t) {
+  // ribbons grow in, staggered, then their tails follow so the bands keep travelling
+  const g = k => eo5(clamp(k));
+  R1.show(lerp(0, .18, eio(pr(t, 2.4, 5.8))), g(pr(t, .0, 2.6)));
+  R2.show(lerp(0, .16, eio(pr(t, 2.6, 6.0))), g(pr(t, .25, 2.8)));
+  R3.show(lerp(0, .14, eio(pr(t, 2.8, 6.0))), g(pr(t, .5, 3.0)));
+  [R1, R2, R3].forEach((r, i) => { r.mesh.rotation.y = (i % 2 ? -1 : 1) * .06 * t; });
+  // the mark resolves in the middle of the braid
+  const k = eo(pr(t, 2.0, 2.9)); LOGO.visible = k > 0; LOGO.position.set(0, CY + .05 * Math.sin(t * 1.6), 0); LOGO.scale.setScalar(Math.max(.001, lerp(.55, 1, k))); LOGO.rotation.y = lerp(-1.2, 0, eio(pr(t, 2.0, 3.2))) + .05 * Math.sin(t);
+  LOGO.children.forEach(c => { c.material.opacity = k; });
+  // ribbon wipe at the end: the wide band sweeps across, carrying us to the next scene
+  WIPE.show(eio(pr(t, 5.15, 5.95)) * .9, eio(pr(t, 4.85, 5.6)));
+  // camera: slow push and orbit
+  const a = lerp(.35, -.12, eio(pr(t, 0, 6))), d = (VERT ? 10.6 : 7.4) * lerp(1.12, 1, eio(pr(t, 0, 4)));
+  camera.position.set(Math.sin(a) * d, CY + lerp(1.4, .6, eio(pr(t, 0, 4))), Math.cos(a) * d); camera.lookAt(0, CY - (VERT ? .2 : 0), 0);
+  camera.setViewOffset(W, H, 0, VERT ? -120 : 0, W, H); camera.updateProjectionMatrix();
+}
+
+/* ---------------- 2D overlay ---------------- */
+const font = (w, s, f = '"Cairo", Tahoma, sans-serif') => { ctx.font = `${w} ${s}px ${f}`; };
+function reveal(txt, x, y, size, weight, col, k, o = {}) {
+  if (k <= 0) return; ctx.save(); font(weight, size, o.fam); ctx.direction = o.ltr ? 'ltr' : 'rtl'; ctx.textAlign = 'center'; if (o.ls) ctx.letterSpacing = o.ls + 'px';
+  const w = ctx.measureText(txt).width, e = eo(k); ctx.beginPath(); ctx.rect(x - w / 2 - 20, y - size * 1.4, w + 40, size * 2); ctx.clip();
+  ctx.globalAlpha = e; ctx.shadowColor = 'rgba(13,11,29,.6)'; ctx.shadowBlur = 24; ctx.fillStyle = col; ctx.fillText(txt, x, y + (1 - e) * size * .6); ctx.restore();
+}
+function overlay(t) {
+  const fade = 1 - pr(t, 4.9, 5.3), y0 = VERT ? 1460 : 900, x = W / 2;
+  ctx.save(); ctx.globalAlpha = fade;
+  reveal('XR UNIVERSE STUDIO', x, y0, VERT ? 30 : 26, 500, C.cyan, pr(t, 2.9, 3.4), { ltr: true, fam: '"JBM", monospace', ls: 12 });
+  reveal('نصنع واقعاً تفاعلياً', x, y0 + (VERT ? 110 : 90), VERT ? 92 : 76, 900, C.ink, pr(t, 3.2, 3.8));
+  ctx.restore();
+  const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .4, W / 2, H / 2, Math.max(W, H) * .75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+}
+function renderAt(t) {
+  t = clamp(t, 0, DUR - 1e-4); update(t); composer.render();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.drawImage(renderer.domElement, 0, 0, W, H); overlay(t);
+}
+window.renderAt = renderAt;
+(async () => {
+  await Promise.all(['900 60px Cairo', '500 20px JBM'].map(f => document.fonts.load(f)));
+  const tex = await new THREE.TextureLoader().loadAsync('brand/xr_mark_1024.png'); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; buildLogo(tex);
+  window.READY = true;
+})();
+</script>

@@ -21,3 +21,14 @@ ar-pro/run_all.log
 ar-pro/sheet_*.jpg
 ar-pro/chk.jpg
 ar-pro/node_modules/
+studio-ad/node_modules
+studio-ad/parts/
+studio-ad/stills/
+studio-ad/_wrap_*.html
+studio-ad/log_*.txt
+studio-ad/*.jpg
+studio-ad/parts/
+studio-ad/stills/
+studio-ad/logs/
+studio-ad/_wrap_*.html
+studio-ad/*.jpg
