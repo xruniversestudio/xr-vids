@@ -20,11 +20,12 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /* ======================================================================
    Brand ribbons — satin bands that echo the XR logo's folded strips.
-   Ribbon demo: three bands sweep in, braid around the centre, the mark
-   resolves in their middle, then a ribbon wipe carries us to the next scene.
+   Ribbon demo: three bands sweep in and wind themselves into the orbits of a
+   digital globe; the mark resolves inside, AR tracking brackets lock onto it,
+   then a ribbon wipe carries us to the next scene.
    ====================================================================== */
 const QS = new URLSearchParams(location.search), VERT = QS.get('fmt') === 'v';
-const W = VERT ? 1080 : 1920, H = VERT ? 1920 : 1080, DUR = 6;
+const W = VERT ? 1080 : 1920, H = VERT ? 1920 : 1080, DUR = 7;
 const C = { bg: '#0d0b1d', ink: '#F4EEFA', dim: '#A69FC2', cyan: '#4FC3E0', mag: '#E2367A', violet: '#7B57C8', purple: '#5B3F8F', deep: '#3B2A6B' };
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const pr = (t, a, b) => clamp((t - a) / (b - a));
@@ -57,74 +58,115 @@ const rimM = new THREE.PointLight(0xe2367a, 12, 12, 2); rimM.position.set(3.5, 2
 const floor = new THREE.Mesh(new THREE.CircleGeometry(40, 96), new THREE.MeshStandardMaterial({ color: 0x110e20, roughness: .35, metalness: .2, envMapIntensity: .3 }));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
-/* ---------------- ribbon geometry ----------------
-   A band of width w swept along a Catmull-Rom curve. The band twists around the
-   tangent (turns), tapers at both ends, and carries a two-colour gradient. Indices
-   run head-to-tail, so drawing a prefix "grows" the ribbon along its path. */
-function ribbonGeometry(points, { width = .34, turns = 1.2, segs = 600, cA, cB, thick = .018 }) {
-  const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
-  const fr = curve.computeFrenetFrames(segs, false), pos = [], nor = [], col = [], idx = [];
-  const A = new THREE.Color(cA), B = new THREE.Color(cB), tmp = new THREE.Color();
-  for (let i = 0; i <= segs; i++) {
-    const t = i / segs, p = curve.getPointAt(t), T = fr.tangents[i], N = fr.normals[i], Bn = fr.binormals[i];
-    const a = turns * t * Math.PI * 2, side = N.clone().multiplyScalar(Math.cos(a)).add(Bn.clone().multiplyScalar(Math.sin(a)));
-    const face = new THREE.Vector3().crossVectors(T, side).normalize();
-    const taper = Math.min(1, t / .06, (1 - t) / .06), w = width * (.15 + .85 * Math.sqrt(Math.max(0, taper)));
-    tmp.copy(A).lerp(B, eio(t));
-    for (const [s, f] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) { // front pair, back pair (thin slab)
-      const v = p.clone().addScaledVector(side, s * w / 2).addScaledVector(face, f * thick / 2);
-      pos.push(v.x, v.y, v.z); nor.push(face.x * f, face.y * f, face.z * f); col.push(tmp.r, tmp.g, tmp.b);
-    }
-    if (i < segs) { const o = i * 4, n = o + 4; idx.push(o, n, o + 1, o + 1, n, n + 1, o + 2, o + 3, n + 2, o + 3, n + 3, n + 2, o, o + 2, n, o + 2, n + 2, n, o + 1, n + 1, o + 3, o + 3, n + 1, n + 3); }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.setIndex(idx); g.computeVertexNormals(); g.userData = { segs, per: 24, curve };
-  return g;
-}
+/* ---------------- morphing ribbons ----------------
+   Each band is sampled at segs+1 points along a free path (A). Over the morph it
+   travels, point by point, onto an orbital ring (B) around the centre, so three
+   loose ribbons wind themselves into the orbits of a digital globe. The band's
+   width axis blends from the twisted path frame to the ring axis (a belt). */
+const CY = 2.5, GR = 1.45;                       // globe centre height, globe radius
 const satin = (env = .45) => new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: .34, metalness: 0, clearcoat: .7, clearcoatRoughness: .18, envMapIntensity: env, side: THREE.DoubleSide });
-class Ribbon {
-  constructor(points, opts) { this.geo = ribbonGeometry(points, opts); this.mesh = new THREE.Mesh(this.geo, satin(opts.env)); this.mesh.castShadow = true; this.mesh.receiveShadow = true; scene.add(this.mesh); }
-  /* show the band between tail and head (0..1 along its length) */
-  show(tail, head) {
-    const { segs, per } = this.geo.userData, a = Math.floor(clamp(tail) * segs), b = Math.floor(clamp(head) * segs);
-    this.mesh.visible = b > a; this.geo.setDrawRange(a * per, Math.max(0, b - a) * per);
+const PER = 24;
+function slabIndex(segs) { const idx = []; for (let i = 0; i < segs; i++) { const o = i * 4, n = o + 4; idx.push(o, n, o + 1, o + 1, n, n + 1, o + 2, o + 3, n + 2, o + 3, n + 3, n + 2, o, o + 2, n, o + 2, n + 2, n, o + 1, n + 1, o + 3, o + 3, n + 1, n + 3); } return idx; }
+class MorphRibbon {
+  constructor(points, ring, { width = .34, turns = 1, segs = 480, cA, cB, thick = .018, env }) {
+    Object.assign(this, { ring, width, segs, thick });
+    const curve = new THREE.CatmullRomCurve3(points.map(p => p.clone().add(V3(0, CY - 1.5, 0))), false, 'centripetal');
+    const fr = curve.computeFrenetFrames(segs, false); this.A = []; this.sideA = [];
+    for (let i = 0; i <= segs; i++) {
+      const u = i / segs, a = turns * u * Math.PI * 2; this.A.push(curve.getPointAt(u));
+      this.sideA.push(fr.normals[i].clone().multiplyScalar(Math.cos(a)).add(fr.binormals[i].clone().multiplyScalar(Math.sin(a))));
+    }
+    const n = (segs + 1) * 4, col = new Float32Array(n * 3), A = new THREE.Color(cA), B = new THREE.Color(cB), c = new THREE.Color();
+    for (let i = 0; i <= segs; i++) { c.copy(A).lerp(B, Math.sin(Math.PI * i / segs) ** 2 * .9 + eio(i / segs) * .1); for (let k = 0; k < 4; k++) col.set([c.r, c.g, c.b], (i * 4 + k) * 3); }
+    const g = this.geo = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setIndex(slabIndex(segs));
+    this.mesh = new THREE.Mesh(g, satin(env)); this.mesh.castShadow = this.mesh.receiveShadow = true; this.mesh.frustumCulled = false; scene.add(this.mesh);
+  }
+  /* M: morph progress 0..1 (staggered along the band), t: time for ring precession */
+  update(M, t, tail, head) {
+    const { segs, ring, width, thick } = this, P = [], S = [], pos = this.geo.attributes.position.array;
+    const ax = ring.axis.clone().applyAxisAngle(V3(0, 1, 0), ring.spin * t).normalize();
+    const u0 = Math.abs(ax.y) < .9 ? V3(0, 1, 0) : V3(1, 0, 0), e1 = new THREE.Vector3().crossVectors(ax, u0).normalize(), e2 = new THREE.Vector3().crossVectors(ax, e1);
+    for (let i = 0; i <= segs; i++) {
+      const u = i / segs, m = eio(clamp((M - .4 * (1 - u)) / .6)), th = ring.phase + u * Math.PI * 2 + ring.roll * t;
+      const b = V3(0, CY, 0).addScaledVector(e1, Math.cos(th) * ring.r).addScaledVector(e2, Math.sin(th) * ring.r);
+      P.push(this.A[i].clone().lerp(b, m)); S.push(this.sideA[i].clone().lerp(ax, m)); P[i].m = m;
+    }
+    for (let i = 0; i <= segs; i++) {
+      const T = P[Math.min(segs, i + 1)].clone().sub(P[Math.max(0, i - 1)]).normalize(), side = S[i].addScaledVector(T, -S[i].dot(T)).normalize(), face = new THREE.Vector3().crossVectors(T, side).normalize();
+      const u = i / segs, taper = lerp(Math.min(1, u / .06, (1 - u) / .06), 1, P[i].m), w = width * (.15 + .85 * Math.sqrt(Math.max(0, taper)));
+      let k = i * 12; for (const [s, f] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) { const p = P[i]; pos[k++] = p.x + side.x * s * w / 2 + face.x * f * thick / 2; pos[k++] = p.y + side.y * s * w / 2 + face.y * f * thick / 2; pos[k++] = p.z + side.z * s * w / 2 + face.z * f * thick / 2; }
+    }
+    this.geo.attributes.position.needsUpdate = true; this.geo.computeVertexNormals();
+    const a = Math.floor(clamp(tail) * segs), z = Math.floor(clamp(head) * segs);
+    this.mesh.visible = z > a; this.geo.setDrawRange(a * PER, Math.max(0, z - a) * PER);
   }
 }
 
-/* three braided paths around the centre (y≈1.5); hand-placed control points, no randomness */
-const CY = 1.5;
-/* each band makes one wide sweep: in from off-frame, around behind the mark, back in front below it, and out */
-const R1 = new Ribbon([V3(-8, -.5, 3), V3(-3.2, .9, 1.6), V3(-2.2, 2.6, -.6), V3(0, 3.25, -1.6), V3(2.3, 2.7, -.8), V3(2.6, 1.3, .9), V3(.6, .45, 1.9), V3(-2.4, .8, 1.4), V3(-6, 2.4, -2)], { cA: '#3B2470', cB: '#8A5BD6', width: .42, turns: .9 });
-const R2 = new Ribbon([V3(8, 3.6, 2), V3(3.4, 2.4, 1.2), V3(2.4, .9, -1.2), V3(0, .35, -2.0), V3(-2.4, 1.2, -1.2), V3(-2.7, 2.6, .6), V3(-1, 3.0, 1.8), V3(2, 2.3, 2.2), V3(6, .3, -1)], { cA: '#2BB7E0', cB: '#1A6FA8', width: .36, turns: -.8 });
-const R3 = new Ribbon([V3(-7, 3.8, -1), V3(-3.4, 2.2, -.4), V3(-1.8, .2, 1.0), V3(.6, -.05, 1.6), V3(2.8, .7, .4), V3(3.4, 2.1, -1.4), V3(1.4, 3.4, -2.6), V3(-2, 3.9, -2.4), V3(-7, 2, -4)], { cA: '#E2367A', cB: '#7A3AA6', width: .32, turns: 1.0 });
-/* wipe ribbon: a wide band that sweeps across the frame for scene changes */
-const WIPE = new Ribbon([V3(-9, -2, 2.5), V3(-4, 1, 3.0), V3(0, 2, 3.2), V3(4, 3, 3.0), V3(9, 6, 2.5)], { cA: '#8E1F5E', cB: '#1F5E9E', width: 3.6, turns: .35, segs: 300, thick: .03, env: .12 });
+/* each band sweeps in from off-frame around the centre, then winds onto its orbit */
+const R1 = new MorphRibbon([V3(-8, -.5, 3), V3(-3.2, .9, 1.6), V3(-2.2, 2.6, -.6), V3(0, 3.25, -1.6), V3(2.3, 2.7, -.8), V3(2.6, 1.3, .9), V3(.6, .45, 1.9), V3(-2.4, .8, 1.4), V3(-6, 2.4, -2)],
+  { r: 2.05, axis: V3(.05, 1, .78), phase: 2.2, spin: .03, roll: .25 }, { cA: '#3B2470', cB: '#8A5BD6', width: .40, turns: .9 });
+const R2 = new MorphRibbon([V3(8, 3.6, 2), V3(3.4, 2.4, 1.2), V3(2.4, .9, -1.2), V3(0, .35, -2.0), V3(-2.4, 1.2, -1.2), V3(-2.7, 2.6, .6), V3(-1, 3.0, 1.8), V3(2, 2.3, 2.2), V3(6, .3, -1)],
+  { r: 2.22, axis: V3(1, .35, .25), phase: -.6, spin: -.14, roll: -.3 }, { cA: '#2BB7E0', cB: '#1A6FA8', width: .34, turns: -.8 });
+const R3 = new MorphRibbon([V3(-7, 3.8, -1), V3(-3.4, 2.2, -.4), V3(-1.8, .2, 1.0), V3(.6, -.05, 1.6), V3(2.8, .7, .4), V3(3.4, 2.1, -1.4), V3(1.4, 3.4, -2.6), V3(-2, 3.9, -2.4), V3(-7, 2, -4)],
+  { r: 2.38, axis: V3(-.7, .55, .75), phase: 1.0, spin: .12, roll: .28 }, { cA: '#E2367A', cB: '#7A3AA6', width: .30, turns: 1.0 });
+
+/* wipe ribbon: a wide band that sweeps across the frame for scene changes (static path, grows) */
+const WIPE = (() => {
+  const curve = new THREE.CatmullRomCurve3([V3(-9, -1, 3.5), V3(-4, 2, 4.0), V3(0, 3, 4.2), V3(4, 4, 4.0), V3(9, 7, 3.5)], false, 'centripetal'), segs = 300, fr = curve.computeFrenetFrames(segs, false);
+  const pos = [], col = [], A = new THREE.Color('#8E1F5E'), B = new THREE.Color('#1F5E9E');
+  for (let i = 0; i <= segs; i++) {
+    const u = i / segs, p = curve.getPointAt(u), a = .35 * u * Math.PI * 2, side = fr.normals[i].clone().multiplyScalar(Math.cos(a)).add(fr.binormals[i].clone().multiplyScalar(Math.sin(a))), face = new THREE.Vector3().crossVectors(fr.tangents[i], side).normalize();
+    const c = A.clone().lerp(B, u); for (const [s, f] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) { const v = p.clone().addScaledVector(side, s * 1.8).addScaledVector(face, f * .015); pos.push(v.x, v.y, v.z); col.push(c.r, c.g, c.b); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(slabIndex(segs)); g.computeVertexNormals();
+  const mesh = new THREE.Mesh(g, satin(.12)); scene.add(mesh);
+  return { show(tail, head) { const a = Math.floor(clamp(tail) * segs), b = Math.floor(clamp(head) * segs); mesh.visible = b > a; g.setDrawRange(a * PER, Math.max(0, b - a) * PER); } };
+})();
+
+/* ---------------- digital globe: latitude/longitude grid + data nodes ---------------- */
+const GLOBE = new THREE.Group(); GLOBE.position.set(0, CY, 0); scene.add(GLOBE);
+const gridMat = new THREE.LineBasicMaterial({ color: 0x7fdcf2, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+const GRID = [];
+function circleLine(fn, n = 160) { const pts = []; for (let i = 0; i <= n; i++) pts.push(fn(i / n * Math.PI * 2)); const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), gridMat); l.userData.n = n; GLOBE.add(l); GRID.push(l); return l; }
+for (const lat of [-60, -30, 0, 30, 60]) { const la = lat * Math.PI / 180, r = GR * Math.cos(la), y = GR * Math.sin(la); circleLine(a => V3(Math.cos(a) * r, y, Math.sin(a) * r)); }
+for (let k = 0; k < 6; k++) { const lo = k * Math.PI / 6; circleLine(a => V3(Math.cos(lo) * Math.sin(a) * GR, Math.cos(a) * GR, Math.sin(lo) * Math.sin(a) * GR)); }
+const NODES = [];
+for (const [lat, n, off] of [[-30, 6, 0], [0, 8, .2], [30, 6, .5], [60, 3, .1], [-60, 3, .7]]) for (let k = 0; k < n; k++) {
+  const la = lat * Math.PI / 180, lo = (k / n + off / n) * Math.PI * 2, mag = (k + n) % 3 === 0;
+  const s = new THREE.Mesh(new THREE.SphereGeometry(.04, 16, 12), new THREE.MeshBasicMaterial({ color: mag ? 0xff5c9c : 0x8be6ff }));
+  s.position.set(Math.cos(la) * Math.cos(lo) * GR, Math.sin(la) * GR, Math.cos(la) * Math.sin(lo) * GR); s.userData.d = NODES.length * .045; GLOBE.add(s); NODES.push(s);
+}
+/* soft core glow so the globe reads as a volume */
+const core = new THREE.Mesh(new THREE.SphereGeometry(GR * .98, 48, 32), new THREE.MeshBasicMaterial({ color: 0x3a2a80, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide })); GLOBE.add(core);
 
 /* the mark, as stacked layers for a machined edge */
-let LOGO;
+let LOGO, LW, LH;
 function buildLogo(tex) {
-  const asp = tex.image.width / tex.image.height, w = VERT ? 1.7 : 1.5, h = w / asp; LOGO = new THREE.Group(); scene.add(LOGO);
-  for (let i = 6; i >= 0; i--) { const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: .45, roughness: .3, metalness: .2, color: i ? new THREE.Color().setScalar(.3) : 0xffffff, emissive: i ? 0 : 0xffffff, emissiveMap: i ? null : tex, emissiveIntensity: i ? 0 : .12, side: THREE.DoubleSide }); const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); p.position.z = -i * .012; LOGO.add(p); }
+  const asp = tex.image.width / tex.image.height; LW = 1.45; LH = LW / asp; LOGO = new THREE.Group(); scene.add(LOGO);
+  for (let i = 6; i >= 0; i--) { const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: .45, roughness: .3, metalness: .2, color: i ? new THREE.Color().setScalar(.3) : 0xffffff, emissive: i ? 0 : 0xffffff, emissiveMap: i ? null : tex, emissiveIntensity: i ? 0 : .14, side: THREE.DoubleSide }); const p = new THREE.Mesh(new THREE.PlaneGeometry(LW, LH), m); p.position.z = -i * .012; LOGO.add(p); }
 }
 
+/* timeline (s): 0–1.8 ribbons fly in · 1.5–3.3 they wind into orbits · 2.6–3.7 globe grid draws, nodes light
+   3.0–3.8 mark resolves inside · 3.7–4.4 AR tracking brackets lock on · 4.2 tagline · 5.7–6.9 ribbon wipe */
 function update(t) {
-  // ribbons grow in, staggered, then their tails follow so the bands keep travelling
-  const g = k => eo5(clamp(k));
-  R1.show(lerp(0, .18, eio(pr(t, 2.4, 5.8))), g(pr(t, .0, 2.6)));
-  R2.show(lerp(0, .16, eio(pr(t, 2.6, 6.0))), g(pr(t, .25, 2.8)));
-  R3.show(lerp(0, .14, eio(pr(t, 2.8, 6.0))), g(pr(t, .5, 3.0)));
-  [R1, R2, R3].forEach((r, i) => { r.mesh.rotation.y = (i % 2 ? -1 : 1) * .06 * t; });
-  // the mark resolves in the middle of the braid
-  const k = eo(pr(t, 2.0, 2.9)); LOGO.visible = k > 0; LOGO.position.set(0, CY + .05 * Math.sin(t * 1.6), 0); LOGO.scale.setScalar(Math.max(.001, lerp(.55, 1, k))); LOGO.rotation.y = lerp(-1.2, 0, eio(pr(t, 2.0, 3.2))) + .05 * Math.sin(t);
+  const grow = k => eo5(clamp(k)), M = pr(t, 1.5, 3.3);
+  [[R1, 0], [R2, .2], [R3, .4]].forEach(([r, d]) => r.update(clamp(M * 1.15 - d * .35), t, 0, lerp(grow(pr(t, d, 1.8 + d)), 1, eio(pr(t, 1.5 + d, 3.0 + d)))));
+  // globe: grid lines draw in one after another, nodes pop, core glows
+  GLOBE.rotation.y = .18 * t; GLOBE.rotation.z = .12;
+  gridMat.opacity = .5 * eo(pr(t, 2.6, 3.2)) * (1 - .4 * pr(t, 4.0, 4.6));
+  GRID.forEach((l, i) => { const k = eio(pr(t, 2.6 + i * .06, 3.3 + i * .06)); l.visible = k > 0; l.geometry.setDrawRange(0, Math.floor(k * l.userData.n) + 1); });
+  NODES.forEach(s => { const k = eo5(pr(t, 3.1 + s.userData.d, 3.4 + s.userData.d)); s.visible = k > 0; s.scale.setScalar(Math.max(.001, k * (1 + .25 * Math.sin(t * 5 + s.userData.d * 40)))); });
+  core.material.opacity = .22 * eo(pr(t, 2.8, 3.6));
+  // the mark resolves in the middle of the globe, always facing camera-ish
+  const k = eo(pr(t, 3.0, 3.8)); LOGO.visible = k > 0; LOGO.position.set(0, CY + .04 * Math.sin(t * 1.6), .1); LOGO.scale.setScalar(Math.max(.001, lerp(.4, 1, k))); LOGO.rotation.y = lerp(-1.4, 0, eio(pr(t, 3.0, 4.0))) + camA(t) * .8;
   LOGO.children.forEach(c => { c.material.opacity = k; });
-  // ribbon wipe at the end: the wide band sweeps across, carrying us to the next scene
-  WIPE.show(eio(pr(t, 5.15, 5.95)) * .9, eio(pr(t, 4.85, 5.6)));
+  WIPE.show(eio(pr(t, 6.05, 6.95)) * .9, eio(pr(t, 5.7, 6.5)));
   // camera: slow push and orbit
-  const a = lerp(.35, -.12, eio(pr(t, 0, 6))), d = (VERT ? 10.6 : 7.4) * lerp(1.12, 1, eio(pr(t, 0, 4)));
-  camera.position.set(Math.sin(a) * d, CY + lerp(1.4, .6, eio(pr(t, 0, 4))), Math.cos(a) * d); camera.lookAt(0, CY - (VERT ? .2 : 0), 0);
-  camera.setViewOffset(W, H, 0, VERT ? -120 : 0, W, H); camera.updateProjectionMatrix();
+  const a = camA(t), d = (VERT ? 11.6 : 8.6) * lerp(1.15, 1, eio(pr(t, 0, 4.5)));
+  camera.position.set(Math.sin(a) * d, CY + lerp(1.6, .5, eio(pr(t, 0, 4.5))), Math.cos(a) * d); camera.lookAt(0, CY - (VERT ? 0 : .25), 0); camera.updateProjectionMatrix();
 }
+const camA = t => lerp(.35, -.12, eio(pr(t, 0, DUR)));
 
 /* ---------------- 2D overlay ---------------- */
 const font = (w, s, f = '"Cairo", Tahoma, sans-serif') => { ctx.font = `${w} ${s}px ${f}`; };
@@ -133,11 +175,29 @@ function reveal(txt, x, y, size, weight, col, k, o = {}) {
   const w = ctx.measureText(txt).width, e = eo(k); ctx.beginPath(); ctx.rect(x - w / 2 - 20, y - size * 1.4, w + 40, size * 2); ctx.clip();
   ctx.globalAlpha = e; ctx.shadowColor = 'rgba(13,11,29,.6)'; ctx.shadowBlur = 24; ctx.fillStyle = col; ctx.fillText(txt, x, y + (1 - e) * size * .6); ctx.restore();
 }
+/* AR tracking brackets: project the mark's corners to screen, corners close in and lock */
+function arBrackets(t) {
+  const k = pr(t, 3.7, 4.4); if (k <= 0 || !LOGO) return; const fade = 1 - pr(t, 5.6, 5.9); if (fade <= 0) return;
+  const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => { const v = V3(x * LW / 2, y * LH / 2, 0).applyMatrix4(LOGO.matrixWorld).project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; });
+  let x0 = Math.min(...pts.map(p => p[0])), x1 = Math.max(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1])), y1 = Math.max(...pts.map(p => p[1]));
+  const pad = lerp(Math.min(W, H) * .22, 26, eo5(k)), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2; x0 -= pad; x1 += pad; y0 -= pad; y1 += pad;
+  const L = Math.min(x1 - x0, y1 - y0) * .2, lock = pr(t, 4.25, 4.4), col = lock > 0 ? C.cyan : C.ink;
+  ctx.save(); ctx.globalAlpha = eo(pr(t, 3.7, 3.9)) * fade; ctx.strokeStyle = col; ctx.lineWidth = VERT ? 5 : 4; ctx.lineCap = 'square'; ctx.shadowColor = C.cyan; ctx.shadowBlur = 18 * (.4 + lock);
+  for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]]) { ctx.beginPath(); ctx.moveTo(x, y + sy * L); ctx.lineTo(x, y); ctx.lineTo(x + sx * L, y); ctx.stroke(); }
+  // scan line sweeps the target once while locking
+  const s = pr(t, 3.9, 4.5); if (s > 0 && s < 1) { const yy = lerp(y0, y1, eio(s)), gr = ctx.createLinearGradient(0, yy - 40, 0, yy); gr.addColorStop(0, rgba(C.cyan, 0)); gr.addColorStop(1, rgba(C.cyan, .35)); ctx.fillStyle = gr; ctx.fillRect(x0, yy - 40, x1 - x0, 40); ctx.fillStyle = C.cyan; ctx.fillRect(x0, yy - 1.5, x1 - x0, 3); }
+  // centre reticle + label
+  ctx.globalAlpha *= lock; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.stroke();
+  font(500, VERT ? 24 : 20, '"JBM", monospace'); ctx.letterSpacing = '4px'; ctx.fillStyle = C.cyan; ctx.textAlign = 'left'; ctx.shadowBlur = 0;
+  ctx.fillText('AR TRACKING', x0, y0 - 16); ctx.textAlign = 'right'; ctx.fillStyle = C.mag; ctx.fillText('● LIVE', x1, y1 + (VERT ? 40 : 34));
+  ctx.restore();
+}
 function overlay(t) {
-  const fade = 1 - pr(t, 4.9, 5.3), y0 = VERT ? 1460 : 900, x = W / 2;
+  arBrackets(t);
+  const fade = 1 - pr(t, 5.7, 6.1), y0 = VERT ? 1580 : 935, x = W / 2;
   ctx.save(); ctx.globalAlpha = fade;
-  reveal('XR UNIVERSE STUDIO', x, y0, VERT ? 30 : 26, 500, C.cyan, pr(t, 2.9, 3.4), { ltr: true, fam: '"JBM", monospace', ls: 12 });
-  reveal('نصنع واقعاً تفاعلياً', x, y0 + (VERT ? 110 : 90), VERT ? 92 : 76, 900, C.ink, pr(t, 3.2, 3.8));
+  reveal('XR UNIVERSE STUDIO', x, y0, VERT ? 32 : 26, 500, C.cyan, pr(t, 4.2, 4.7), { ltr: true, fam: '"JBM", monospace', ls: 12 });
+  reveal('نصنع واقعاً تفاعلياً', x, y0 + (VERT ? 112 : 88), VERT ? 92 : 72, 900, C.ink, pr(t, 4.5, 5.1));
   ctx.restore();
   const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .4, W / 2, H / 2, Math.max(W, H) * .75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
 }
