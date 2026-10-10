@@ -1,6 +1,6 @@
 # XR Universe Studio — صور إضافية (النسخة 2)
 
-هالمرة بدنا **5 صور**، وكلها لنفس "الموديل": **مانيكان أزياء ثلاثي الأبعاد بجسم كامل**، أنيق ولامع، ومن دون إنسان حقيقي. منستخدمه حتى تصير تجربة اللبس الافتراضية مفهومة وواقعية: الملابس والإكسسوارات بتتبدل على المانيكان **جوّا شاشة المرآة وشاشة الموبايل**، بدل ما تطير قدّام الشاشة.
+هالمرة بدنا **6 صور**، وكلها لنفس "الموديل": **مانيكان أزياء ثلاثي الأبعاد بجسم كامل**، أنيق ولامع، ومن دون إنسان حقيقي. منستخدمه حتى تصير تجربة اللبس الافتراضية مفهومة وواقعية: الملابس والإكسسوارات بتتبدل على المانيكان **جوّا شاشة المرآة وشاشة الموبايل**، بدل ما تطير قدّام الشاشة.
 
 ---
 
@@ -52,6 +52,13 @@ edit this image: keep the exact same mannequin, same pose, same framing, same li
 edit this image: keep the exact same mannequin, same pose, same framing, same lighting and background. Change the outfit to: an elegant floor-length magenta-to-violet satin evening gown with a soft drape, delicate rose-gold drop earrings, and a small iridescent cream clutch bag held in one hand. The dress fits the body realistically with natural satin folds and highlights. No logos. premium 3D render, same style
 ```
 
+### A06 — نفس المانيكان من الخلف (الحقيقي، واقف قدّام المرآة) · `A06_body_back.png`
+**المقاس:** 9:16 · **خلفية:** شفافة · **الطريقة:** توليد جديد (التعديل ما بيقدر يلفّ المانيكان)
+> هاد المانيكان "الحقيقي" اللي واقف قدّام المرآة، وظهره للكاميرا، ولابس **اللبس الأساسي نفسه** تبع A01. لازم يكون نفس اللون ونفس الملابس، حتى ينفهم إنه هو نفسه اللي ظاهر بالشاشة.
+```
+a sleek stylized female-form fashion mannequin seen from behind, full body from head to feet, rear view, standing straight, arms relaxed close to the body, smooth glossy pearl-white surface with subtle iridescent violet and cyan sheen, no hair, bald smooth head, wearing a simple fitted warm-cream long-sleeve top and slim cream trousers with minimal white sneakers, small empty space above the head and below the feet, premium 3D render, soft studio lighting, glossy satin and iridescent glass materials, color palette deep violet #5B3F8F, cyan #4FC3E0, magenta #E2367A, warm cream #F8EDE0, subtle rim light, clean modern tech aesthetic, octane render, high detail, sharp focus, isolated on a transparent background
+```
+
 ---
 
 ## الفلاتر (لقطة سيلفي قريبة)
@@ -76,6 +83,6 @@ edit this image: keep the exact same mannequin face, same pose, same framing, sa
 
 | المشهد | قبل | بعد |
 |---|---|---|
-| **3 — مرآة الواقع المعزز** | الأغراض بتطير قدّام الشاشة | جوّا شاشة المرآة بيوقف المانيكان بلبسه الأساسي (A01)، وبتمسح عليه شبكة تتبع الجسم. بتطلع قائمة إطلالات صغيرة جوّا واجهة المرآة، ولما تنختار وحدة بيتبدل لبسه بمسحة ضوئية ← A02 ← A03. بعدين بيدخل موبايل جنب المرآة عليه نفس التجربة، وبيطلع نص «بالمتجر أو من موبايلك». |
+| **3 — مرآة الواقع المعزز** | الأغراض بتطير قدّام الشاشة | المانيكان الحقيقي (A06) واقف قدّام المرآة وظهره إلنا، ولابس اللبس الأساسي. جوّا الشاشة بيبيّن انعكاسه من القدّام (A01)، وبتمسح عليه شبكة تتبع الجسم. بتطلع قائمة إطلالات صغيرة جوّا واجهة المرآة، ولما تنختار وحدة بيتبدل لبسه **بالشاشة بس** بمسحة ضوئية ← A02 ← A03، والمانيكان الحقيقي بيضل بلبسه الأساسي. هاد هو سحر الـAR. بعدين بيدخل موبايل جنب المرآة عليه نفس التجربة، وبيطلع نص «بالمتجر أو من موبايلك». |
 | **5 — الفلاتر** | الأذنين والتاج على شاشة فاضية | جوّا شاشة السيلفي بيبيّن الوجه (A04) مع نقاط تتبع الوجه، والفلتر بينطبق ← A05. |
 | **1 — المنتجات (من غير صور جديدة)** | العطر بيطلع من الشاشة لبرا | جوّا شاشة الموبايل بيبيّن منظر الكاميرا للأرضية، وعليه مؤشر تموضع AR، وبعدين بيتحط العطر عليه. |
