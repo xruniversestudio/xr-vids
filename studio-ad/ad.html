@@ -28,7 +28,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    Every value is a pure function of t (no randomness), so frames are exact.
    ====================================================================== */
 const QS = new URLSearchParams(location.search), VERT = QS.get('fmt') === 'v';
-const W = VERT ? 1080 : 1920, H = VERT ? 1920 : 1080, DUR = 35;
+const W = VERT ? 1080 : 1920, H = VERT ? 1920 : 1080, DUR = 37.4;
 const C = { bg: '#0d0b1d', ink: '#F4EEFA', dim: '#A69FC2', cyan: '#4FC3E0', mag: '#E2367A', violet: '#7B57C8', purple: '#5B3F8F', deep: '#3B2A6B' };
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const pr = (t, a, b) => clamp((t - a) / (b - a));
@@ -142,7 +142,8 @@ function buildLogo(tex) {
 /* ======================================================================
    timing: intro, five services, outro. SW[i] = start of scene i+1 (cut).
    ====================================================================== */
-const SW = [6.3, 11.1, 15.9, 20.7, 25.5, 30.3];
+const SW = [6.3, 11.1, 15.9, 23.1, 27.9, 32.7];
+const LEN = i => (SW[i] ?? DUR) - SW[i - 1]; // length of service scene i (1-based)
 const P = (h, v) => VERT ? v : h;
 const hash = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 
@@ -281,23 +282,82 @@ const WIPE = (() => {
 
 /* ---------------- service scenes ---------------- */
 const SC = [];
-function svcCam(u, { a0 = .16, a1 = -.12, lx = 0 } = {}) {
-  const k = eio(clamp(u / 4.8)), a = lerp(a0, a1, k), d = P(8.2, 10.2) * lerp(1.07, .96, k) * lerp(1.06, 1, eo(pr(u, 0, .8))), ly = P(1.25, 2.1);
+function svcCam(u, { a0 = .16, a1 = -.12, lx = 0, len = 4.8 } = {}) {
+  const k = eio(clamp(u / len)), a = lerp(a0, a1, k), d = P(8.2, 10.2) * lerp(1.07, .96, k) * lerp(1.06, 1, eo(pr(u, 0, .8))), ly = P(1.25, 2.1);
   camera.position.set(lx + Math.sin(a) * d, ly + P(.75, .55) + .1 * (1 - k), Math.cos(a) * d); camera.lookAt(lx, ly, 0); camera.updateMatrixWorld(true);
 }
-function scene1(G) { // AR / WebAR product experiences: perfume rises out of the phone into AR
-  const phone = new Card('P01_phone', P(3.0, 3.0), G), perf = new Card('P02_product', P(2.5, 1.9), G), ring = holoRing(G, P(.62, .5)), sh = blob(G, 2.6, .9), sh2 = blob(G, 1.6, .6);
-  const rib = new Ribbon(G, swirl(V3(P(.2, 0), 0, 0), P(2.6, 1.8), 1.3, .3, 2.6, { dir: -1 }), { cA: RIB[0][0], cB: RIB[0][1], width: .28, turns: 1.4 }), mo = motes(G, 60, 11, [5, 4, 3]);
+/* ---------------- live screens ----------------
+   A canvas drawn every frame and warped onto the screen quad of a card (corners
+   measured per image, in image fractions), so app content plays INSIDE the
+   device: camera views, try-on, lenses. */
+class Screen {
+  constructor(card, quad, cw, ch, radius = 28) {
+    this.cv = document.createElement('canvas'); this.cv.width = cw; this.cv.height = ch; this.g = this.cv.getContext('2d'); this.radius = radius;
+    this.tex = new THREE.CanvasTexture(this.cv); this.tex.colorSpace = THREE.SRGBColorSpace; this.tex.anisotropy = 8;
+    const geo = new THREE.PlaneGeometry(1, 1, 12, 12), p = geo.attributes.position, Cq = quad.map(([fx, fy]) => [(fx - .5) * card.w, (1 - fy) * card.h - card.pad]);
+    for (let i = 0; i < p.count; i++) { const u = p.getX(i) + .5, v = .5 - p.getY(i), tx = lerp(Cq[0][0], Cq[1][0], u), ty = lerp(Cq[0][1], Cq[1][1], u), bx = lerp(Cq[3][0], Cq[2][0], u), by = lerp(Cq[3][1], Cq[2][1], u); p.setXYZ(i, lerp(tx, bx, v), lerp(ty, by, v), .004); }
+    this.mat = new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, depthWrite: false, opacity: 0 }); this.mesh = new THREE.Mesh(geo, this.mat); card.pivot.add(this.mesh);
+  }
+  begin() { const { g, cv, radius: r } = this; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.clearRect(0, 0, cv.width, cv.height); g.save(); g.beginPath(); g.roundRect(0, 0, cv.width, cv.height, r); g.clip(); return g; }
+  end(op) { this.g.restore(); this.tex.needsUpdate = true; this.mat.opacity = op; this.mesh.visible = op > .001; }
+}
+const el = n => IMG[n].tex.image;
+/* draw an image so that its subject's bounding box (from meta) is h px tall, bottom of the box at (cx, by) */
+function drawFigure(g, n, cx, by, h) { const m = IMG[n].meta, s = h / ((1 - m.top - m.bot) * m.h), bx = ((m.l + (1 - m.r)) / 2) * m.w; g.drawImage(el(n), cx - bx * s, by - (1 - m.bot) * m.h * s, m.w * s, m.h * s); return s; }
+function drawCover(g, n, x, y, w, h, fx = .5, fy = .5, zoom = 1) { const im = el(n), s = Math.max(w / im.width, h / im.height) * zoom, iw = im.width * s, ih = im.height * s; g.drawImage(im, x + (w - iw) * fx, y + (h - ih) * fy, iw, ih); }
+function scanLine(g, y, w, a = 1) { const gr = g.createLinearGradient(0, y - 60, 0, y + 6); gr.addColorStop(0, rgba(C.cyan, 0)); gr.addColorStop(1, rgba(C.cyan, .45 * a)); g.fillStyle = gr; g.fillRect(0, y - 60, w, 66); g.fillStyle = rgba('#CFF6FF', a); g.fillRect(0, y - 2, w, 4); }
+function sparkles(g, cx, cy, r, k, seed, n = 14) { if (k <= 0 || k >= 1) return; for (let i = 0; i < n; i++) { const a = hash(seed + i) * 6.283, d = r * (.3 + .9 * hash(seed + i + 50)) * eo(k), s = 6 * (1 - k) * (.5 + hash(seed + i + 9)); g.fillStyle = i % 3 ? rgba(C.cyan, 1 - k) : rgba(C.mag, 1 - k); g.beginPath(); g.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, s, 0, 6.283); g.fill(); } }
+function ripple(g, x, y, k, col = '#ffffff') { if (k <= 0 || k >= 1) return; g.strokeStyle = rgba(col, .9 * (1 - k)); g.lineWidth = 4; g.beginPath(); g.arc(x, y, 14 + 50 * eo(k), 0, 6.283); g.stroke(); g.fillStyle = rgba(col, .5 * (1 - k)); g.beginPath(); g.arc(x, y, 14, 0, 6.283); g.fill(); }
+function uiFont(g, w, s) { g.font = `${w} ${s}px "JBM", monospace`; }
+function pill(g, x, y, w, h, fill, stroke) { g.beginPath(); g.roundRect(x, y, w, h, h / 2); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = 2; g.stroke(); } }
+/* body-tracking skeleton, key points in fractions of the figure's bounding box */
+const BODY = { head: [.5, .065], neck: [.5, .15], ls: [.28, .19], rs: [.72, .19], le: [.2, .34], re: [.8, .34], lh: [.16, .47], rh: [.84, .47], lp: [.38, .47], rp: [.62, .47], lk: [.4, .71], rk: [.6, .71], lf: [.4, .96], rf: [.6, .96] };
+const BONES = [['head', 'neck'], ['neck', 'ls'], ['neck', 'rs'], ['ls', 'le'], ['le', 'lh'], ['rs', 're'], ['re', 'rh'], ['ls', 'lp'], ['rs', 'rp'], ['lp', 'rp'], ['lp', 'lk'], ['lk', 'lf'], ['rp', 'rk'], ['rk', 'rf']];
+function skeleton(g, box, k, t) {
+  if (k <= 0) return; const P2 = n => [box.x + BODY[n][0] * box.w, box.y + BODY[n][1] * box.h];
+  g.save(); g.globalAlpha = Math.min(1, k * 1.5); g.strokeStyle = rgba(C.cyan, .75); g.lineWidth = 3; g.shadowColor = C.cyan; g.shadowBlur = 10;
+  BONES.forEach(([a, b], i) => { const q = clamp(k * BONES.length * 1.2 - i); if (q <= 0) return; const A = P2(a), B = P2(b); g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(lerp(A[0], B[0], q), lerp(A[1], B[1], q)); g.stroke(); });
+  Object.keys(BODY).forEach((n, i) => { const [x, y] = P2(n), q = clamp(k * 16 - i); if (q <= 0) return; g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x, y, 6 * eo5(q) * (1 + .15 * Math.sin(t * 6 + i)), 0, 6.283); g.fill(); g.strokeStyle = C.cyan; g.lineWidth = 2; g.stroke(); });
+  g.restore();
+}
+/* face mesh: rings of points over an oval + eyes/nose/mouth contours */
+function faceMesh(g, cx, cy, fw, fh, k, t) {
+  if (k <= 0) return; const pts = [];
+  for (let r = 1; r <= 4; r++) for (let i = 0; i < 10 + r * 6; i++) { const a = i / (10 + r * 6) * 6.283, rr = r / 4; pts.push([cx + Math.sin(a) * fw / 2 * rr, cy - Math.cos(a) * fh / 2 * rr * (Math.cos(a) > 0 ? 1 : 1.08)]); }
+  for (const sx of [-1, 1]) for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283; pts.push([cx + sx * fw * .2 + Math.cos(a) * fw * .09, cy - fh * .06 + Math.sin(a) * fh * .035]); }
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; pts.push([cx + Math.cos(a) * fw * .14, cy + fh * .26 + Math.sin(a) * fh * .045]); }
+  for (let i = 0; i < 5; i++) pts.push([cx, cy - fh * .02 + i * fh * .045]);
+  g.save(); pts.forEach(([x, y], i) => { const q = clamp(k * 3 - (i / pts.length) * 2); if (q <= 0) return; g.fillStyle = rgba(i % 7 ? '#E8FBFF' : C.cyan, .85 * q); g.beginPath(); g.arc(x, y, 2.6 + .8 * Math.sin(t * 5 + i), 0, 6.283); g.fill(); });
+  g.strokeStyle = rgba(C.cyan, .5 * clamp(k * 2)); g.lineWidth = 2; g.beginPath(); g.ellipse(cx, cy, fw / 2, fh / 2 * 1.04, 0, 0, 6.283); g.stroke(); g.restore();
+}
+function scene1(G) { // AR / WebAR products: the phone's camera view of the floor; a reticle, a tap, the product placed in AR
+  const phone = new Card('P01_phone', P(3.4, 3.5), G), sh = blob(G, 2.4, .8), scr = new Screen(phone, IMG.P01_phone.meta.screen, 560, 1180, 46);
+  const rib = new Ribbon(G, swirl(V3(0, 0, 0), P(2.5, 1.9), 1.3, .3, 2.7, { dir: -1 }), { cA: RIB[0][0], cB: RIB[0][1], width: .28, turns: 1.4 }), mo = motes(G, 60, 11, [5, 4, 3]);
   return (u, t) => {
-    svcCam(u, { a0: .2, a1: -.1 }); mo.set(u);
-    const bob = .06 * Math.sin(u * 2.2), px = P(-1.6, -.5), py = P(.25, .2) + bob;
-    phone.set({ x: px, y: py, z: 0, rev: eio(pr(u, .2, 1.1)), rz: .04 * Math.sin(u * 1.3) });
+    const len = LEN(1); svcCam(u, { a0: .2, a1: -.1, len }); mo.set(u);
+    const bob = .05 * Math.sin(u * 2), px = P(-.2, -.1), py = P(.2, .3) + bob;
+    phone.set({ x: px, y: py, z: 0, rev: eio(pr(u, .1, .9)), rz: .03 * Math.sin(u * 1.2) });
     sh.position.set(px, .004, .2); sh.material.opacity = .8;
-    const k = eo5(pr(u, .9, 2.0)), fx = P(1.45, .55), fy = P(.75, 1.75) + .08 * Math.sin(u * 1.8 + 1);
-    perf.set({ x: lerp(px + .2, fx, k), y: lerp(py + 1.1, fy, k), z: lerp(.2, .7, k), s: lerp(.15, 1, k), op: pr(u, .9, 1.1), rev: eio(pr(u, 1.1, 2.1)), rz: lerp(.5, 0, k) + .05 * Math.sin(u * 1.5) });
-    ring.position.set(fx, P(.12, 1.95), .7); ring.set(pr(u, 1.6, 2.3), u); sh2.position.set(fx, .004, .7); sh2.material.opacity = .6 * k;
-    rib.show(.55 * eio(pr(u, 2.4, 4.8)), eo(pr(u, .3, 2.8)));
-    return [{ c: perf.rect(.18, .04, .85, .93), k: pr(u, 2.2, 2.9), a: 'AR · WEBAR', b: '3D · 360°' }];
+    // screen: live camera view of the studio floor (gentle hand drift), AR reticle, tap, product placed
+    const g = scr.begin(), cw = 560, ch = 1180, cx = cw / 2 + 10 * Math.sin(u * .9), gy = ch * .68;
+    drawCover(g, 'BG02_studio_horizontal', -40 + 14 * Math.sin(u * .8), -30, cw + 80, ch + 60, .5, .78, 1.9);
+    g.fillStyle = 'rgba(8,6,20,.25)'; g.fillRect(0, 0, cw, ch);
+    const rk = eo5(pr(u, .9, 1.4)), placed = pr(u, 1.9, 2.5), rr = 120;
+    if (rk > 0) { g.save(); g.globalAlpha = rk * (1 - .7 * placed); g.strokeStyle = '#ffffff'; g.lineWidth = 5; g.beginPath(); g.ellipse(cx, gy, rr * rk, rr * .32 * rk, 0, 0, 6.283); g.stroke(); g.setLineDash([14, 12]); g.lineDashOffset = -u * 40; g.strokeStyle = C.cyan; g.beginPath(); g.ellipse(cx, gy, rr * 1.35 * rk, rr * .43 * rk, 0, 0, 6.283); g.stroke(); g.restore(); }
+    if (rk > 0 && placed <= 0) { g.save(); g.globalAlpha = rk; uiFont(g, 700, 26); g.textAlign = 'center'; pill(g, cx - 130, gy + 80, 260, 50, 'rgba(10,8,24,.6)', rgba(C.cyan, .8)); g.fillStyle = '#fff'; g.fillText('TAP TO PLACE', cx, gy + 114); g.restore(); }
+    ripple(g, cx, gy, pr(u, 1.75, 2.25));
+    if (placed > 0) {
+      const b = eo5(placed), pop = 1 + .12 * Math.sin(placed * Math.PI) * (1 - placed), hgt = 470 * b * pop;
+      g.save(); g.fillStyle = 'rgba(0,0,0,.45)'; g.beginPath(); g.ellipse(cx, gy + 6, 120 * b, 30 * b, 0, 0, 6.283); g.fill(); g.restore();
+      g.save(); g.translate(cx, gy + 10); g.rotate(.06 * Math.sin(u * 1.4) * b); drawFigure(g, 'P02_product', 0, 0, hgt); g.restore();
+      sparkles(g, cx, gy - 200, 260, pr(u, 1.9, 2.8), 31);
+      g.save(); g.globalAlpha = pr(u, 2.6, 3.0); pill(g, cx - 110, 120, 220, 52, 'rgba(10,8,24,.55)', rgba(C.cyan, .9)); uiFont(g, 700, 24); g.textAlign = 'center'; g.fillStyle = C.cyan; g.fillText('3D · 360°', cx, 154); g.restore();
+    }
+    g.save(); uiFont(g, 700, 22); g.fillStyle = 'rgba(255,255,255,.85)'; g.textAlign = 'left'; g.fillText('● AR VIEW', 40, 70); g.restore();
+    g.save(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 6; g.beginPath(); g.arc(cw / 2, ch - 110, 46, 0, 6.283); g.stroke(); g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(cw / 2, ch - 110, 36, 0, 6.283); g.fill(); g.restore();
+    scr.end(eo(pr(u, .6, 1.0)));
+    rib.show(.55 * eio(pr(u, 2.4, len)), eo(pr(u, .3, 2.8)));
+    return [{ c: phone.rect(...IMG.P01_phone.meta.screen.reduce((a, [x, y]) => [Math.min(a[0], x), Math.min(a[1], y), Math.max(a[2], x), Math.max(a[3], y)], [1, 1, 0, 0])), k: pr(u, 2.6, 3.3), a: 'AR · WEBAR', b: '● PLACED' }];
   };
 }
 function scene2(G) { // interactive exhibitions & events
@@ -311,19 +371,49 @@ function scene2(G) { // interactive exhibitions & events
     return [{ c: kiosk.rect(.27, .02, .78, .55), k: pr(u, 2.2, 2.9), a: 'TOUCH · INTERACT', b: '● LIVE' }];
   };
 }
-function scene3(G) { // AR mirror / virtual try-on
-  const mirror = new Card('M01_ar_mirror', P(3.4, 3.9), G, { refl: true }), items = new Card('M02_tryon_items', P(2.4, 1.7), G), sh = blob(G, 1.8, .6);
-  const rib = new Ribbon(G, swirl(V3(P(-1, -.2), 0, 0), P(2.0, 1.7), 1.3, .4, 3.1, { dir: -1 }), { cA: RIB[2][0], cB: RIB[2][1], width: .26, turns: 1.2 }), mo = motes(G, 60, 37, [5, 4, 3]);
+function scene3(G) { // AR mirror: she stands in front of it in her own clothes; only her reflection changes outfits. Then the same on a phone.
+  const mirror = new Card('M01_ar_mirror', P(3.55, 3.75), G, { refl: true }), girl = new Card('A06_body_back', P(3.3, 3.35), G, { refl: true });
+  const phone = new Card('P01_phone', P(2.3, 1.9), G), sh = blob(G, 1.6, .55);
+  const ms = new Screen(mirror, IMG.M01_ar_mirror.meta.screen, 480, 2060, 10), ps = new Screen(phone, IMG.P01_phone.meta.screen, 520, 1100, 44);
+  const rib = new Ribbon(G, swirl(V3(P(-.2, -.1), 0, 0), P(2.4, 1.8), 1.4, .4, 3.1, { dir: -1 }), { cA: RIB[2][0], cB: RIB[2][1], width: .26, turns: 1.2 }), mo = motes(G, 60, 37, [5, 4, 3]);
+  const LOOKS = ['A01_body_base', 'A02_body_outfit1', 'A03_body_outfit2'];
+  const SWAP = [2.5, 4.1]; // outfit changes (tap at -0.35 s)
+  function look(u) { let i = 0; while (i < SWAP.length && u >= SWAP[i] + .7) i++; return i; }
+  function tryOn(g, cw, ch, u, t, { figH, by, chips = true, chipY, track = true }) {
+    const gr = g.createLinearGradient(0, 0, 0, ch); gr.addColorStop(0, '#1a1238'); gr.addColorStop(.75, '#2a1a52'); gr.addColorStop(1, '#120c26'); g.fillStyle = gr; g.fillRect(0, 0, cw, ch);
+    g.fillStyle = 'rgba(79,195,224,.08)'; g.fillRect(0, by - 2, cw, ch - by + 2);
+    const cur = look(u); let swapping = -1; SWAP.forEach((s, i) => { if (u >= s && u < s + .7) swapping = i; });
+    if (swapping < 0) drawFigure(g, LOOKS[cur], cw / 2, by, figH);
+    else { const p = eio(pr(u, SWAP[swapping], SWAP[swapping] + .7)), yy = lerp(by - figH * 1.05, by + 10, p);
+      drawFigure(g, LOOKS[swapping], cw / 2, by, figH); g.save(); g.beginPath(); g.rect(0, 0, cw, yy); g.clip(); drawFigure(g, LOOKS[swapping + 1], cw / 2, by, figH); g.restore(); scanLine(g, yy, cw); sparkles(g, cw / 2, yy, cw * .45, pr(u, SWAP[swapping] + .1, SWAP[swapping] + .9), 70 + swapping * 13, 18); }
+    if (track) { const m = IMG.A01_body_base.meta, bw = figH * (1 - m.l - m.r) * m.w / ((1 - m.top - m.bot) * m.h); skeleton(g, { x: cw / 2 - bw / 2, y: by - figH, w: bw, h: figH }, pr(u, .9, 1.7) * (1 - pr(u, 2.0, 2.4)), t); }
+    if (chips) { // outfit menu inside the app
+      const a = eo5(pr(u, 1.7, 2.1)), n = 3, cs = cw * .24, gap = cw * .05, x0 = (cw - n * cs - (n - 1) * gap) / 2, y = chipY + (1 - a) * 160;
+      g.save(); g.globalAlpha = a; pill(g, x0 - 18, y - 18, n * cs + (n - 1) * gap + 36, cs + 36, 'rgba(10,8,24,.55)', null);
+      for (let i = 0; i < n; i++) { const x = x0 + i * (cs + gap); g.save(); g.beginPath(); g.roundRect(x, y, cs, cs, 14); g.clip(); g.fillStyle = '#2b1d55'; g.fillRect(x, y, cs, cs); const mm = IMG[LOOKS[i]].meta; drawFigure(g, LOOKS[i], x + cs / 2, y + cs * 2.2, cs * 2.3); g.restore();
+        g.strokeStyle = i === cur ? C.cyan : 'rgba(255,255,255,.35)'; g.lineWidth = i === cur ? 5 : 2; g.beginPath(); g.roundRect(x, y, cs, cs, 14); g.stroke(); }
+      SWAP.forEach((s, i) => ripple(g, x0 + (i + 1) * (cs + gap) + cs / 2, y + cs / 2, pr(u, s - .35, s + .2)));
+      g.restore(); }
+  }
   return (u, t) => {
-    svcCam(u, { a0: .14, a1: -.14, lx: P(.2, 0) }); mo.set(u);
-    const mx = P(-.6, -.35); mirror.set({ x: mx, y: 0, z: 0, rev: eio(pr(u, .2, 1.3)), face: .7 });
-    // items float in on the right, then fly into the mirror screen as a virtual try-on
-    const a = eo5(pr(u, .7, 1.5)), b = eio(pr(u, 2.0, 2.9)), sx = P(2.1, 1.25), sy = P(.6, 2.45) + .06 * Math.sin(u * 2);
-    const tx = mx + P(.06, .06), ty = P(.8, 1.05);
-    items.set({ x: lerp(lerp(4.5, sx, a), tx, b), y: lerp(sy, ty, b), z: lerp(.8, .15, b), s: lerp(1, P(.62, .82), b), op: pr(u, .7, .9), rev: eio(pr(u, .8, 1.6)), rz: .05 * Math.sin(u * 1.4) * (1 - b) });
-    sh.position.set(lerp(sx, tx, b), .004, lerp(.8, .15, b)); sh.material.opacity = .6 * a * (1 - b);
-    rib.show(.55 * eio(pr(u, 2.4, 4.8)), eo(pr(u, .3, 2.8)));
-    return [{ c: mirror.rect(.33, .05, .67, .84), k: pr(u, 2.7, 3.3), a: 'VIRTUAL TRY-ON', b: '● ON' }];
+    const len = LEN(3); svcCam(u, { a0: .2, a1: -.06, lx: P(.15, 0), len }); mo.set(u);
+    const mx = P(.75, .5); mirror.set({ x: mx, y: 0, z: -.3, rev: eio(pr(u, .1, 1.0)), face: .55 });
+    girl.set({ x: P(-1.15, -.85), y: 0, z: P(1.0, 1.0), op: eo(pr(u, .3, .8)), face: .75 });
+    // mirror screen: her reflection, tracked, then outfits change on the reflection only
+    const g = ms.begin(); tryOn(g, 480, 2060, u, t, { figH: 1640, by: 1930, chipY: 1690 });
+    g.save(); uiFont(g, 700, 26); g.fillStyle = 'rgba(255,255,255,.8)'; g.textAlign = 'center'; g.fillText('XR MIRROR', 240, 70); g.restore();
+    const sg = g.createLinearGradient(0, 0, 480, 600); sg.addColorStop(0, 'rgba(255,255,255,.08)'); sg.addColorStop(.5, 'rgba(255,255,255,0)'); g.fillStyle = sg; g.fillRect(0, 0, 480, 2060);
+    ms.end(eo(pr(u, .7, 1.1)));
+    // the same try-on on a phone
+    const pk = eo5(pr(u, 4.7, 5.5)), ppx = lerp(P(4.6, 3.2), P(2.35, 1.3), pk), ppy = P(.5, .35) + .05 * Math.sin(u * 2);
+    phone.set({ x: ppx, y: ppy, z: P(1.5, 1.9), op: pk > 0 ? 1 : 0, rz: lerp(.3, .04, pk) });
+    sh.position.set(ppx, .004, P(1.5, 1.9)); sh.material.opacity = .5 * pk;
+    const pg = ps.begin(); tryOn(pg, 520, 1100, u, t, { figH: 1500, by: 1450, chips: false, track: false });
+    pg.save(); uiFont(pg, 700, 24); pg.fillStyle = 'rgba(255,255,255,.85)'; pg.textAlign = 'center'; pg.fillText('VIRTUAL TRY-ON', 260, 80); pg.restore();
+    ps.end(pk);
+    rib.show(.55 * eio(pr(u, 3.0, len)), eo(pr(u, .3, 3.0)));
+    return [{ c: mirror.rect(...[.32, .05, .67, .85]), k: pr(u, 1.0, 1.6) * (1 - pr(u, 4.4, 4.7)), a: 'BODY TRACKING', b: '● LIVE' },
+            { c: phone.rect(.23, .03, .76, .91), k: pr(u, 5.4, 6.0), a: 'TRY-ON · MOBILE', b: '● LIVE' }];
   };
 }
 function scene4(G) { // immersive cultural & spatial storytelling
@@ -338,20 +428,33 @@ function scene4(G) { // immersive cultural & spatial storytelling
     return [{ c: amph.rect(.3, .03, .7, .72), k: pr(u, 2.5, 3.1), a: 'HERITAGE · 3D SCAN', b: '● AR' }];
   };
 }
-function scene5(G) { // Snapchat lenses & YouTube effects
-  const phone = new Card('F02_selfie_phone', P(4.1, 3.95), G, { refl: true }), face = new Card('F01_face_filter_items', 1, G), icons = new Card('F03_effect_icons', P(2.2, 1.45), G), sh = blob(G, 1.8, .6);
+function scene5(G) { // lenses & effects: the selfie camera tracks her face, then the lens is applied
+  const phone = new Card('F02_selfie_phone', P(4.1, 3.95), G, { refl: true }), icons = new Card('F03_effect_icons', P(2.0, 1.45), G), sh = blob(G, 1.8, .6);
+  const scr = new Screen(phone, IMG.F02_selfie_phone.meta.screen, 560, 1240, 40);
   const rib = new Ribbon(G, swirl(V3(P(-.6, 0), 0, 0), P(2.4, 1.8), 1.3, .3, 3.0, { dir: -1 }), { cA: RIB[0][0], cB: RIB[1][0], width: .26, turns: -1.3 }), mo = motes(G, 70, 71, [5, 4, 3]);
   return (u, t) => {
-    svcCam(u, { a0: .16, a1: -.12 }); mo.set(u);
-    const px = P(-.85, 0), ph = phone.h; phone.set({ x: px, y: 0, z: 0, rev: eio(pr(u, .2, 1.3)), face: .7 });
-    // the lens pops onto the empty screen (screen ≈ 23–77% wide, 17–82% tall of the image)
-    const scrW = .5 * ph * 941 / 1672, k = pr(u, 1.3, 1.8), pop = k <= 0 ? 0 : 1 + .25 * Math.sin(k * Math.PI) * (1 - k);
-    face.set({ x: px, y: ph * (1 - .55) - phone.pad - scrW * .5, z: .06, s: Math.max(.001, scrW * pop * eo5(k)), op: k > 0 ? 1 : 0, face: .7 });
-    const a = eo5(pr(u, .6, 1.3)), ix = P(2.15, 1.2), iy = P(1.2, 1.55) + .07 * Math.sin(u * 2.1);
-    icons.set({ x: ix, y: iy, z: P(.7, 1.0), s: Math.max(.001, a), rz: .08 * Math.sin(u * 1.6), op: a > 0 ? 1 : 0 });
-    sh.position.set(ix, .004, P(.7, 1.0)); sh.material.opacity = .45 * a;
-    rib.show(.55 * eio(pr(u, 2.4, 4.8)), eo(pr(u, .3, 2.8)));
-    return [{ c: phone.rect(.23, .17, .77, .82), k: pr(u, 1.9, 2.5), a: 'LENS · ACTIVE', b: '● REC' }];
+    const len = LEN(5); svcCam(u, { a0: .16, a1: -.12, len }); mo.set(u);
+    const px = P(-.75, 0); phone.set({ x: px, y: 0, z: 0, rev: eio(pr(u, .1, 1.0)), face: .7 });
+    const g = scr.begin(), cw = 560, ch = 1240, sw = pr(u, 1.9, 2.3);
+    g.fillStyle = '#1a1238'; g.fillRect(0, 0, cw, ch);
+    // selfie feed (slight breathing zoom); cover-fit so the face sits in the upper-middle
+    const z = 1.0 + .02 * Math.sin(u * 1.3);
+    drawCover(g, 'A04_face_bare', 0, 0, cw, ch, .5, .62, z);
+    if (sw > 0) { g.save(); g.globalAlpha = eo(sw); drawCover(g, 'A05_face_filter', 0, 0, cw, ch, .5, .62, z); g.restore(); }
+    const fcx = cw * .5, fcy = ch * .52, fw = cw * .42, fh = cw * .58; // face oval in canvas px (measured on A04)
+    faceMesh(g, fcx, fcy, fw, fh, pr(u, .9, 1.6) * (1 - pr(u, 1.9, 2.3)), t);
+    sparkles(g, fcx, fcy - fh * .5, cw * .5, pr(u, 1.9, 2.8), 91, 22);
+    // lens carousel + shutter
+    const a = eo5(pr(u, .6, 1.0)), by = ch - 120;
+    g.save(); g.globalAlpha = a; for (let i = -2; i <= 2; i++) { const x = cw / 2 + i * 96, r = i === 0 ? 50 : 34; const gg = g.createLinearGradient(x - r, by - r, x + r, by + r); gg.addColorStop(0, [C.mag, C.violet, C.cyan, C.violet, C.mag][i + 2]); gg.addColorStop(1, '#F8EDE0'); g.fillStyle = gg; g.beginPath(); g.arc(x, by, r - (i === 0 ? 8 : 0), 0, 6.283); g.fill(); }
+    g.strokeStyle = '#fff'; g.lineWidth = 6; g.beginPath(); g.arc(cw / 2, by, 50, 0, 6.283); g.stroke(); g.restore();
+    ripple(g, cw / 2 + 96, by, pr(u, 1.55, 2.0));
+    scr.end(eo(pr(u, .6, 1.0)));
+    const ia = eo5(pr(u, .6, 1.3)), ix = P(2.15, 1.25), iy = P(1.2, 1.55) + .07 * Math.sin(u * 2.1);
+    icons.set({ x: ix, y: iy, z: P(.7, 1.0), s: Math.max(.001, ia), rz: .08 * Math.sin(u * 1.6), op: ia > 0 ? 1 : 0 });
+    sh.position.set(ix, .004, P(.7, 1.0)); sh.material.opacity = .45 * ia;
+    rib.show(.55 * eio(pr(u, 2.4, len)), eo(pr(u, .3, 2.8)));
+    return [{ c: phone.rect(.26, .17, .75, .8), k: pr(u, 1.0, 1.6), a: 'FACE TRACKING', b: '● LENS ON' }];
   };
 }
 function outro(G) { // glass ring + the mark + call to action
@@ -371,7 +474,7 @@ function outro(G) { // glass ring + the mark + call to action
 const TXT = [
   { no: '01', en: 'AR · WEBAR PRODUCT EXPERIENCES', ar: ['تجارب المنتجات', 'بالواقع المعزز'], sub: 'منتجك ثلاثي الأبعاد أمام عميلك مباشرة من المتصفح' },
   { no: '02', en: 'INTERACTIVE EXHIBITIONS & EVENTS', ar: ['تجارب تفاعلية', 'للمعارض والفعاليات'], sub: 'شاشات لمس وأجنحة ذكية تجذب الزوار' },
-  { no: '03', en: 'AR MIRROR · VIRTUAL TRY-ON', ar: ['مرآة', 'الواقع المعزز'], sub: 'جرّب الأزياء والإكسسوارات افتراضياً' },
+  { no: '03', en: 'AR MIRROR · VIRTUAL TRY-ON', ar: ['مرآة', 'الواقع المعزز'], sub: 'جرّب الأزياء والإكسسوارات افتراضياً', sub2: 'في المتجر… أو من موبايلك', at: 4.8 },
   { no: '04', en: 'IMMERSIVE CULTURAL STORYTELLING', ar: ['سرد ثقافي', 'ومكاني غامر'], sub: 'نعيد إحياء التراث بتجارب رقمية حيّة' },
   { no: '05', en: 'SNAPCHAT LENSES · YOUTUBE EFFECTS', ar: ['فلاتر سناب شات', 'وتأثيرات يوتيوب'], sub: 'فلاتر وتأثيرات مخصصة لعلامتك التجارية' },
 ];
@@ -403,17 +506,18 @@ function shade(top) { // legibility band behind titles
   const g = top ? ctx.createLinearGradient(0, 0, 0, 640) : ctx.createLinearGradient(0, H, 0, H - 300);
   g.addColorStop(0, 'rgba(10,8,24,.72)'); g.addColorStop(1, 'rgba(10,8,24,0)'); ctx.fillStyle = g; ctx.fillRect(0, top ? 0 : H - 300, W, 300 + (top ? 340 : 0));
 }
-function titles(u, d) {
-  const fade = 1 - pr(u, 4.2, 4.5), x = W / 2; if (fade <= 0) return;
+function titles(u, d, len) {
+  const fade = 1 - pr(u, len - .6, len - .3), x = W / 2; if (fade <= 0) return;
+  const sub = d.sub2 && u >= d.at ? d.sub2 : d.sub, sk = d.sub2 ? (u >= d.at ? pr(u, d.at, d.at + .5) : pr(u, .75, 1.3) * (1 - pr(u, d.at - .3, d.at))) : pr(u, .75, 1.3);
   ctx.save(); ctx.globalAlpha = fade * eo(pr(u, .2, .7)); shade(VERT); ctx.globalAlpha = fade;
   if (VERT) {
     reveal(d.no + '  —  ' + d.en, x, 210, 26, 500, C.cyan, pr(u, .35, .8), { ltr: true, fam: '"JBM", monospace', ls: 5 });
     reveal(d.ar[0], x, 320, 90, 900, C.ink, pr(u, .45, 1.0)); reveal(d.ar[1], x, 425, 90, 900, C.ink, pr(u, .55, 1.1));
-    reveal(d.sub, x, 515, 36, 700, C.dim, pr(u, .75, 1.3));
+    reveal(sub, x, 515, 36, 700, sub === d.sub2 ? C.cyan : C.dim, sk);
   } else {
     reveal(d.no + '  —  ' + d.en, x, 878, 22, 500, C.cyan, pr(u, .35, .8), { ltr: true, fam: '"JBM", monospace', ls: 5 });
     reveal(d.ar.join(' '), x, 958, 66, 900, C.ink, pr(u, .5, 1.05));
-    reveal(d.sub, x, 1022, 30, 700, C.dim, pr(u, .75, 1.3));
+    reveal(sub, x, 1022, 30, 700, sub === d.sub2 ? C.cyan : C.dim, sk);
   }
   ctx.restore();
 }
@@ -447,7 +551,7 @@ function renderAt(t) {
   composer.render();
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.drawImage(renderer.domElement, 0, 0, W, H);
   if (i === 0) introText(t);
-  else if (i <= 5) { huds.forEach(h => brackets(h.c, h.k, h.a, h.b, 1 - pr(u, 4.1, 4.4))); titles(u, TXT[i - 1]); }
+  else if (i <= 5) { const len = LEN(i); huds.forEach(h => brackets(h.c, h.k, h.a, h.b, 1 - pr(u, len - .7, len - .4))); titles(u, TXT[i - 1], len); }
   else outroText(u);
   const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .4, W / 2, H / 2, Math.max(W, H) * .75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.45)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
   const end = pr(t, DUR - .5, DUR); if (end > 0) { ctx.fillStyle = `rgba(0,0,0,${end})`; ctx.fillRect(0, 0, W, H); }

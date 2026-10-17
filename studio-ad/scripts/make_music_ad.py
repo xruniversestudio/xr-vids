@@ -1,12 +1,12 @@
-"""Original 35 s soundtrack for the XR Universe Studio services film, synthesized from
+"""Original 37.4 s soundtrack for the XR Universe Studio services film, synthesized from
 scratch (no samples, no licensing). 100 BPM, bars of 2.4 s on a grid starting at 1.5 s, so
-every scene cut (6.3, 11.1, 15.9, 20.7, 25.5, 30.3) lands on a downbeat. Intro builds over the
+every scene cut (6.3, 11.1, 15.9, 23.1, 27.9, 32.7) lands on a downbeat. Intro builds over the
 ribbons/globe, drops at the first service, whooshes carry each wipe, outro resolves on the mark."""
 import sys, wave
 import numpy as np
 
-SR = 48000; DUR = 35.0; N = int(SR * DUR); BEAT = 0.6; G0 = 1.5
-CUTS = [6.3, 11.1, 15.9, 20.7, 25.5, 30.3]
+SR = 48000; DUR = 37.4; N = int(SR * DUR); BEAT = 0.6; G0 = 1.5
+CUTS = [6.3, 11.1, 15.9, 23.1, 27.9, 32.7]
 t = np.arange(N) / SR
 rng = np.random.default_rng(7)
 L = np.zeros(N); R = np.zeros(N)
@@ -57,7 +57,7 @@ def groove(a, b, fill_at=None):
         for s in range(8): put(CL, fill_at + s * BEAT / 4, .15 + .05 * s, .0)
 
 groove(6.3, 15.9 - 4 * BEAT / 4 * 0, fill_at=15.9 - 2 * BEAT)
-groove(15.9, 30.3 - 2 * BEAT, fill_at=30.3 - 2 * BEAT)
+groove(15.9, 32.7 - 2 * BEAT, fill_at=32.7 - 2 * BEAT)
 for bt in np.arange(3.9, 6.3, BEAT / 2): put(HC, bt, .1, .2)
 
 # ---------- harmony: Am – F – C – G, one bar (2 s) each ----------
@@ -67,7 +67,7 @@ def chord_at(tt): i = int(max(0, tt - G0) // 2.4) % 4; return ROOTS[i], TRIADS[i
 
 # sidechain envelope from the kicks
 side = np.ones(N)
-for a, b in ((6.3, 30.3 - 2 * BEAT),):
+for a, b in ((6.3, 32.7 - 2 * BEAT),):
     for bt in np.arange(a, b, BEAT):
         i = int(bt * SR); n = min(int(.45 * SR), N - i); x = np.arange(n) / SR
         side[i:i + n] = np.minimum(side[i:i + n], 1 - .7 * np.exp(-x * 9))
@@ -86,7 +86,7 @@ pad = onepole(pad, .06)
 
 # bass: 8th-note saw, filter opens per note, only in the drops
 bass = np.zeros(N)
-for a, b in ((6.3, 30.3 - 2 * BEAT),):
+for a, b in ((6.3, 32.7 - 2 * BEAT),):
     for nt in np.arange(a, b, BEAT / 2):
         root, _ = chord_at(nt); n = int(.24 * SR); x = np.arange(n) / SR
         s = (2 * ((root * x) % 1) - 1) + .5 * (2 * ((root * 2.003 * x) % 1) - 1)
@@ -95,7 +95,7 @@ bass = onepole(bass, .09)
 
 # arpeggio pluck (16ths) in the breakdown and second half
 arp = np.zeros(N)
-for a, b, g in ((3.9, 6.3, .7), (8.7, 30.3, .5), (30.3, 33.9, .8)):
+for a, b, g in ((3.9, 6.3, .7), (8.7, 32.7, .5), (32.7, 36.3, .8)):
     for k, nt in enumerate(np.arange(a, b, BEAT / 4)):
         root, tri = chord_at(nt); st = tri[k % 3] + (12 if (k // 3) % 2 else 0)
         f = root * 4 * 2 ** (st / 12); n = int(.18 * SR); x = np.arange(n) / SR
@@ -143,12 +143,16 @@ for k, c in enumerate(CUTS):
     if k < 5:
         put(chime([880, 987.77, 1046.5, 783.99, 1174.66][k], 1.2), c + 1.1, .35, .25)  # AR scan reveal
         put(glitch(.1), c + 2.4, .25)                                                       # HUD lock
-put(chime(523.25, 3.0), 30.9, 1.1); put(chime(783.99, 2.6), 31.0, .7, .3); put(chime(1046.5, 2.4), 31.1, .45, -.3)  # outro: the mark
+put(chime(523.25, 3.0), 33.3, 1.1); put(chime(783.99, 2.6), 33.4, .7, .3); put(chime(1046.5, 2.4), 33.5, .45, -.3)  # outro: the mark
+M = 15.9
+put(chime(1318.5, .9), M + 1.0, .3, .2)                                   # body tracking
+for sw in (2.5, 4.1): put(glitch(.08), M + sw - .35, .3); put(whoosh(.4), M + sw, .35); put(chime(1567.98, 1.0), M + sw + .5, .3, -.2)  # outfit swaps
+put(whoosh(.5), M + 4.6, .45, .3); put(chime(1174.66, 1.2), M + 5.4, .3)     # phone try-on
 # outro swell: a held A-minor-add9 pad under the mark
 xo = np.arange(int(4.6 * SR)) / SR; sw = np.zeros_like(xo)
 for f in (220.0, 261.63, 329.63, 493.88):
     for det in (-.004, 0, .004): sw += (2 * ((f * (1 + det) * xo) % 1) - 1)
-sw = onepole(sw * np.minimum(xo / .6, 1) * np.exp(-xo / 4.5) * .11, .05); put(sw, 30.3, 1.0)
+sw = onepole(sw * np.minimum(xo / .6, 1) * np.exp(-xo / 4.5) * .11, .05); put(sw, 32.7, 1.0)
 # ---------- room reverb (FFT convolution with a decaying-noise IR) ----------
 ir_n = int(1.3 * SR); xi = np.arange(ir_n) / SR
 irL = rng.standard_normal(ir_n) * np.exp(-xi * 4.2); irR = rng.standard_normal(ir_n) * np.exp(-xi * 4.2)
@@ -160,7 +164,7 @@ wetL, wetR = conv(L, irL), conv(R, irR)
 L = L + wetL * .012; R = R + wetR * .012
 
 mix = np.stack([L, R], 1)
-fade = np.ones(N); fi = int(33.6 * SR); fade[fi:] = np.linspace(1, 0, N - fi) ** 1.5
+fade = np.ones(N); fi = int(36.0 * SR); fade[fi:] = np.linspace(1, 0, N - fi) ** 1.5
 mix *= fade[:, None]
 mix = np.tanh(mix / np.max(np.abs(mix)) * 1.6) / np.tanh(1.6) * .78   # gentle glue/limit
 with wave.open(sys.argv[1], 'wb') as w:
