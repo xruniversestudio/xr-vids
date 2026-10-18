@@ -383,50 +383,56 @@ function faceMesh(g, cx, cy, fw, fh, k, t) {
 /* image target printed on the platform top: the XR mark inside high-contrast rings and shards (good tracking features) */
 function makeTarget() {
   const c = document.createElement('canvas'); c.width = c.height = 1024; const g = c.getContext('2d'), o = 512, pal = ['#5B3F8F', '#E2367A', '#1677A8'];
-  g.fillStyle = '#F8EDE0'; g.beginPath(); g.arc(o, o, 512, 0, 6.283); g.fill();
+  g.fillStyle = '#F8EDE0'; g.fillRect(0, 0, 1024, 1024); g.strokeStyle = '#d9cfc2'; g.lineWidth = 10; g.strokeRect(5, 5, 1014, 1014);
   [470, 405, 340, 275].forEach((r, ri) => { const n = 10 + ri * 4; g.lineWidth = 30 - ri * 4; g.lineCap = 'round'; for (let k = 0; k < n; k++) if (hash(ri * 50 + k) > .3) { g.strokeStyle = pal[(k + ri) % 3]; const a0 = k / n * 6.283 + ri * .3, a1 = a0 + (.4 + .5 * hash(ri * 50 + k + 7)) * 6.283 / n; g.beginPath(); g.arc(o, o, r, a0, a1); g.stroke(); } });
   for (let k = 0; k < 26; k++) { const a = hash(k + 300) * 6.283, r = 200 + 260 * hash(k + 400), s2 = 16 + 22 * hash(k + 500), x = o + Math.cos(a) * r, y = o + Math.sin(a) * r; g.fillStyle = pal[k % 3]; g.beginPath(); g.moveTo(x, y - s2); g.lineTo(x + s2, y + s2 * .8); g.lineTo(x - s2, y + s2 * .8); g.closePath(); g.fill(); }
   g.fillStyle = '#1d1440'; g.beginPath(); g.arc(o, o, 205, 0, 6.283); g.fill(); g.strokeStyle = '#F8EDE0'; g.lineWidth = 8; g.beginPath(); g.arc(o, o, 190, 0, 6.283); g.stroke();
   const mk = IMG.mark.tex.image, mw = 300, mh = mw * mk.height / mk.width; g.drawImage(mk, o - mw / 2, o - mh / 2, mw, mh);
-  g.strokeStyle = '#5B3F8F'; g.lineWidth = 10; g.beginPath(); g.arc(o, o, 505, 0, 6.283); g.stroke();
+  g.strokeStyle = '#5B3F8F'; g.lineWidth = 8; g.beginPath(); g.arc(o, o, 490, 0, 6.283); g.stroke();
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
 function scene1(G) { // AR with an image target: a real platform carries the printed tracker; the phone's camera finds it and the product appears on it — only on screen
   const plx = P(1.0, 1.0), plz = P(-.8, -1.3), TG = IMG.P03_platform.meta.target;
-  const phone = new Card('P01_phone', P(2.9, 2.75), G), sh = blob(G, 1.8, .6), plat = new Card('P03_platform', P(2.1, 2.0), G, { refl: true });
+  const phone = new Card('P01_phone', P(2.9, 2.75), G), sh = blob(G, 1.8, .6);
+  const PRAD = .95, PH = .34, BEV = .07, plat = new THREE.Group(); plat.position.set(plx, 0, plz); G.add(plat);
+  { const prof = [], n = 10; prof.push(new THREE.Vector2(0, 0), new THREE.Vector2(PRAD - BEV, 0));
+    for (let k = 0; k <= n; k++) { const a = -Math.PI / 2 + k / n * Math.PI / 2; prof.push(new THREE.Vector2(PRAD - BEV + Math.cos(a) * BEV, BEV + Math.sin(a) * BEV)); }
+    for (let k = 0; k <= n; k++) { const a = k / n * Math.PI / 2; prof.push(new THREE.Vector2(PRAD - BEV + Math.cos(a) * BEV, PH - BEV + Math.sin(a) * BEV)); }
+    prof.push(new THREE.Vector2(0, PH));
+    const body = new THREE.Mesh(new THREE.LatheGeometry(prof, 160), new THREE.MeshPhysicalMaterial({ color: 0xd8d2ca, roughness: .42, metalness: 0, clearcoat: .35, clearcoatRoughness: .3, sheen: .25, sheenColor: new THREE.Color(0xffffff), envMapIntensity: .55 }));
+    body.castShadow = body.receiveShadow = true; plat.add(body); }
+  // printed target card lying on the top (slightly rounded corners, a hair thick)
+  const tgt = makeTarget(), cardSz = 1.05, card = new THREE.Mesh(new THREE.BoxGeometry(cardSz, .006, cardSz), [0, 1, 2, 3, 4, 5].map(i => i === 2 ? new THREE.MeshStandardMaterial({ map: tgt, roughness: .6 }) : new THREE.MeshStandardMaterial({ color: 0xece6dc, roughness: .6 })));
+  card.position.y = PH + .004; card.rotation.y = .35; plat.add(card);
+  const psh = blob(G, 2.7, 2.7); psh.position.set(plx, .004, plz); psh.material.opacity = .6;
   const rt = new THREE.WebGLRenderTarget(480, 1120, { samples: 4 }), pcam = new THREE.PerspectiveCamera(54, 480 / 1120, .05, 120); pcam.layers.enable(1);
   const scr = new Screen(phone, IMG.P01_phone.meta.screen, 480, 1120, 8, rt.texture, IMG.P01_phone.mask);
   // AR content: rendered only by the phone camera (layer 1)
   const ar = new THREE.Group(); G.add(ar);
-  const perf = new Card('P02_product', 1.2, ar);
+  const perf = new Card('P02_product', 1.25, ar);
   const fl = new THREE.Mesh(new THREE.CircleGeometry(5, 64), new THREE.MeshStandardMaterial({ color: 0x150f2b, roughness: .35, metalness: .3, transparent: true, alphaMap: blobTex, opacity: .95 })); fl.rotation.x = -Math.PI / 2; fl.position.set(plx, .001, plz); ar.add(fl);
   ar.traverse(o => o.layers.set(1));
   const rib = new Ribbon(G, swirl(V3(P(-.1, -.05), 0, .35), P(2.7, 2.0), P(2.1, 2.3), .3, 2.8, { dir: -1 }), { cA: RIB[0][0], cB: RIB[0][1], width: .28, turns: 1.2 }), mo = motes(G, 60, 11, [5, 4, 3]);
-  // target ellipse (image fractions) -> world points on the platform card
-  const tgtPts = () => { plat.root.updateMatrixWorld(true); const r = TG.ang * Math.PI / 180, out = [];
-    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, ex = Math.cos(a) * TG.a, ey = Math.sin(a) * TG.b, fx = TG.cx + ex * Math.cos(r) - ey * Math.sin(r) * plat.h / plat.w, fy = TG.cy + ex * Math.sin(r) * plat.w / plat.h + ey * Math.cos(r);
-      out.push(V3((fx - .5) * plat.w, (1 - fy) * plat.h - plat.pad, 0).applyMatrix4(plat.mesh.matrixWorld)); } return out; };
-  const centre = () => { plat.root.updateMatrixWorld(true); return V3((TG.cx - .5) * plat.w, (1 - TG.cy) * plat.h - plat.pad, 0).applyMatrix4(plat.mesh.matrixWorld); };
+  // target card corners and centre in world space
+  const tgtPts = () => { card.updateMatrixWorld(true); return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => V3(x * cardSz / 2, .004, z * cardSz / 2).applyMatrix4(card.matrixWorld)); };
+  const centre = () => V3(plx, PH + .01, plz);
   const proj = v => { const q = v.clone().project(pcam); return [(q.x + 1) / 2 * 480, (1 - q.y) / 2 * 1120]; };
   return (u, t) => {
     const len = LEN(1); svcCam(u, { a0: .16, a1: -.12, len }); mo.set(u);
     const px = P(-1.25, -.75), py = P(.45, .4) + .04 * Math.sin(u * 1.8), pz = P(1.5, 1.7);
     phone.set({ x: px, y: py, z: pz, rev: eio(pr(u, .1, .9)), rz: .02 * Math.sin(u * 1.1), face: .9 });
     sh.position.set(px, .004, pz); sh.material.opacity = .7;
-    plat.set({ x: plx, y: 0, z: plz, rev: eio(pr(u, .2, 1.0)), face: 1 });
     // the phone's camera: from the phone, aimed at the platform (hand drift)
-    pcam.position.set(px + .05 * Math.sin(u * .9), py + phone.h * .55, pz); pcam.lookAt(plx + .06 * Math.sin(u * .7), .95, plz); pcam.updateMatrixWorld(true);
+    pcam.position.set(px + .05 * Math.sin(u * .9), py + phone.h * .55, pz); pcam.lookAt(plx + .06 * Math.sin(u * .7), .7, plz); pcam.updateMatrixWorld(true);
     const found = pr(u, 1.55, 1.9), appear = pr(u, 1.9, 2.6), b = eo5(appear), pop = 1 + .14 * Math.sin(appear * Math.PI) * (1 - appear);
     // live camera feed: the platform faces the phone camera (same render, seen from the phone), product on the target centre
-    plat.root.rotation.y = Math.atan2(pcam.position.x - plx, pcam.position.z - plz);
-    const c0 = centre(), toCam = pcam.position.clone().sub(c0).normalize();
-    perf.set({ x: c0.x + toCam.x * .08, y: c0.y - .02, z: c0.z + toCam.z * .08, s: Math.max(.001, b * pop), op: appear > 0 ? 1 : 0, rz: .04 * Math.sin(u * 1.5) * b });
+    const c0 = centre();
+    perf.set({ x: c0.x, y: c0.y, z: c0.z, s: Math.max(.001, b * pop), op: appear > 0 ? 1 : 0, rz: .04 * Math.sin(u * 1.5) * b });
     perf.root.rotation.y = Math.atan2(pcam.position.x - perf.root.position.x, pcam.position.z - perf.root.position.z);
     const keepBg = scene.background; phone.root.visible = false; BGP.visible = false; rib.mesh.visible = false; mo.visible = false; scene.background = IMG.BG01_studio_vertical.tex;
     renderer.setRenderTarget(rt); renderer.render(scene, pcam); renderer.setRenderTarget(null);
     const pts = tgtPts().map(proj), pc = proj(c0.clone().add(V3(0, .7, 0)));
     scene.background = keepBg; phone.root.visible = true; BGP.visible = true; mo.visible = true; rib.show(.55 * eio(pr(u, 2.4, len)), eo(pr(u, .3, 2.8)));
-    plat.root.rotation.y = Math.atan2(camera.position.x - plx, camera.position.z - plz); // back to facing the viewer
     // app UI over the feed
     const g = scr.begin(), cw = 480, ch = 1120;
     const tx0 = Math.min(...pts.map(q => q[0])) - 14, tx1 = Math.max(...pts.map(q => q[0])) + 14, ty0 = Math.min(...pts.map(q => q[1])) - 14, ty1 = Math.max(...pts.map(q => q[1])) + 14;
