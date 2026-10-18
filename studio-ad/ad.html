@@ -73,6 +73,19 @@ const satin = (env = .45) => new THREE.MeshPhysicalMaterial({ vertexColors: true
    across the width, PM vertices per ring; normals are smooth, so light rolls softly over the edges. */
 const PM = 18, PER = 6 * PM;
 const PROF = [...Array(PM)].map((_, k) => { const a = k / PM * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a); return [Math.sign(c) * Math.abs(c) ** .4, Math.sign(sn) * Math.abs(sn) ** .4]; });
+/* rotation-minimising (parallel-transport) frames: no sudden flips at inflections, unlike Frenet frames */
+function ptFrames(curve, segs) {
+  const T = [], N = [], B = [];
+  for (let i = 0; i <= segs; i++) T.push(curve.getTangentAt(i / segs).normalize());
+  let n = Math.abs(T[0].y) < .9 ? V3(0, 1, 0) : V3(1, 0, 0); n.addScaledVector(T[0], -n.dot(T[0])).normalize();
+  N.push(n); B.push(new THREE.Vector3().crossVectors(T[0], n));
+  for (let i = 1; i <= segs; i++) {
+    const ax = new THREE.Vector3().crossVectors(T[i - 1], T[i]), l = ax.length(), nn = N[i - 1].clone();
+    if (l > 1e-7) nn.applyAxisAngle(ax.divideScalar(l), Math.acos(clamp(T[i - 1].dot(T[i]), -1, 1)));
+    nn.addScaledVector(T[i], -nn.dot(T[i])).normalize(); N.push(nn); B.push(new THREE.Vector3().crossVectors(T[i], nn));
+  }
+  return { tangents: T, normals: N, binormals: B };
+}
 function ringIndex(segs) { const idx = []; for (let i = 0; i < segs; i++) for (let k = 0; k < PM; k++) { const a = i * PM + k, b = i * PM + (k + 1) % PM; idx.push(a, a + PM, b, b, a + PM, b + PM); } return idx; }
 /* write one ring: centre p, width axis side, thickness axis face, half width hw, half thickness ht, cup depth (fraction of hw) */
 function writeRing(pos, i, p, side, face, hw, ht, cup) {
@@ -86,7 +99,7 @@ class MorphRibbon {
   constructor(points, ring, { width = .34, turns = 1, segs = 480, cA, cB, thick = .05, env }) {
     Object.assign(this, { ring, width, segs, thick });
     const curve = new THREE.CatmullRomCurve3(points.map(p => p.clone().add(V3(0, CY - 1.5, 0))), false, 'centripetal');
-    const fr = curve.computeFrenetFrames(segs, false); this.A = []; this.sideA = []; this.capU = width / 2 / curve.getLength();
+    const fr = ptFrames(curve, segs); this.A = []; this.sideA = []; this.capU = width / 2 / curve.getLength();
     for (let i = 0; i <= segs; i++) {
       const u = i / segs, a = turns * u * Math.PI * 2; this.A.push(curve.getPointAt(u));
       this.sideA.push(fr.normals[i].clone().multiplyScalar(Math.cos(a)).add(fr.binormals[i].clone().multiplyScalar(Math.sin(a))));
@@ -242,7 +255,7 @@ function motes(parent, n, seed, box) {
 /* ---------------- static satin ribbons for the service scenes ---------------- */
 class Ribbon {
   constructor(parent, points, { width = .3, turns = 1, segs = 400, cA, cB, thick = .045, env = .3 }) {
-    const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal'), fr = curve.computeFrenetFrames(segs, false), col = [];
+    const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal'), fr = ptFrames(curve, segs), col = [];
     const A = new THREE.Color(cA), B = new THREE.Color(cB), c = new THREE.Color(); this.R = []; Object.assign(this, { segs, thick, capU: width / 2 / curve.getLength() });
     for (let i = 0; i <= segs; i++) {
       const u = i / segs, p = curve.getPointAt(u), a = turns * u * Math.PI * 2, side = fr.normals[i].clone().multiplyScalar(Math.cos(a)).add(fr.binormals[i].clone().multiplyScalar(Math.sin(a))), face = new THREE.Vector3().crossVectors(fr.tangents[i], side).normalize();
@@ -260,9 +273,12 @@ class Ribbon {
 }
 /* a band that enters from off-frame, circles a centre (behind, then in front) while rising, and leaves */
 function swirl(c, rx, rz, y0, y1, { turns = 1.15, a0 = Math.PI, dir = 1, n = 12 } = {}) {
-  const pts = [V3(c.x - dir * 8, y0 - .6, 2.5)];
-  for (let k = 0; k <= n; k++) { const u = k / n, a = a0 + dir * u * turns * Math.PI * 2; pts.push(V3(c.x + Math.cos(a) * rx, lerp(y0, y1, u), c.z + Math.sin(a) * rz)); }
-  pts.push(V3(c.x + dir * 8, y1 + 1.2, -3)); return pts;
+  // enter and leave along the circle's own tangent, so the band never turns tighter than its width
+  const at = u => { const a = a0 + dir * u * turns * Math.PI * 2; return V3(c.x + Math.cos(a) * rx, lerp(y0, y1, u), c.z + Math.sin(a) * rz); };
+  const tan = u => at(Math.min(1, u + .002)).sub(at(Math.max(0, u - .002))).normalize();
+  const p0 = at(0), t0 = tan(0), p1 = at(1), t1 = tan(1), pts = [p0.clone().addScaledVector(t0, -7), p0.clone().addScaledVector(t0, -3)];
+  for (let k = 0; k <= n; k++) pts.push(at(k / n));
+  pts.push(p1.clone().addScaledVector(t1, 3), p1.clone().addScaledVector(t1, 7)); return pts;
 }
 const RIB = [['#E2367A', '#7A3AA6'], ['#2BB7E0', '#5B3F8F'], ['#8A5BD6', '#E2367A'], ['#3B2470', '#2BB7E0']];
 
