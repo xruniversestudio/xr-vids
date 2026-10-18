@@ -68,22 +68,33 @@ floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; INTRO.add(floor);
    loose ribbons wind themselves into the orbits of a digital globe. The band's
    width axis blends from the twisted path frame to the ring axis (a belt). */
 const CY = 2.5, GR = 1.45;                       // globe centre height, globe radius
-const satin = (env = .45) => new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: .34, metalness: 0, clearcoat: .7, clearcoatRoughness: .18, envMapIntensity: env, side: THREE.DoubleSide });
-const PER = 24;
+const satin = (env = .45) => new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: .3, metalness: 0, clearcoat: .55, clearcoatRoughness: .22, sheen: .6, sheenRoughness: .35, sheenColor: new THREE.Color(0xf3e6ff), envMapIntensity: env, side: THREE.DoubleSide });
+/* Ribbon cross-section: a superellipse (flat faces, fully rounded edges) with a slight satin cup
+   across the width, PM vertices per ring; normals are smooth, so light rolls softly over the edges. */
+const PM = 18, PER = 6 * PM;
+const PROF = [...Array(PM)].map((_, k) => { const a = k / PM * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a); return [Math.sign(c) * Math.abs(c) ** .4, Math.sign(sn) * Math.abs(sn) ** .4]; });
+function ringIndex(segs) { const idx = []; for (let i = 0; i < segs; i++) for (let k = 0; k < PM; k++) { const a = i * PM + k, b = i * PM + (k + 1) % PM; idx.push(a, a + PM, b, b, a + PM, b + PM); } return idx; }
+/* write one ring: centre p, width axis side, thickness axis face, half width hw, half thickness ht, cup depth (fraction of hw) */
+function writeRing(pos, i, p, side, face, hw, ht, cup) {
+  const th = Math.min(ht, hw * .8); let k = i * PM * 3;
+  for (let j = 0; j < PM; j++) { const x = PROF[j][0] * hw, y = PROF[j][1] * th + cup * hw * (1 - PROF[j][0] ** 2); pos[k++] = p.x + side.x * x + face.x * y; pos[k++] = p.y + side.y * x + face.y * y; pos[k++] = p.z + side.z * x + face.z * y; }
+}
+/* half-width factor at distance d (in curve fraction) from a moving end; r = half the band width in curve fraction → round tip */
+const tipCap = (d, r) => d <= 0 ? 0 : d >= r ? 1 : Math.sqrt(1 - (1 - d / r) ** 2);
 function slabIndex(segs) { const idx = []; for (let i = 0; i < segs; i++) { const o = i * 4, n = o + 4; idx.push(o, n, o + 1, o + 1, n, n + 1, o + 2, o + 3, n + 2, o + 3, n + 3, n + 2, o, o + 2, n, o + 2, n + 2, n, o + 1, n + 1, o + 3, o + 3, n + 1, n + 3); } return idx; }
 class MorphRibbon {
-  constructor(points, ring, { width = .34, turns = 1, segs = 480, cA, cB, thick = .018, env }) {
+  constructor(points, ring, { width = .34, turns = 1, segs = 480, cA, cB, thick = .05, env }) {
     Object.assign(this, { ring, width, segs, thick });
     const curve = new THREE.CatmullRomCurve3(points.map(p => p.clone().add(V3(0, CY - 1.5, 0))), false, 'centripetal');
-    const fr = curve.computeFrenetFrames(segs, false); this.A = []; this.sideA = [];
+    const fr = curve.computeFrenetFrames(segs, false); this.A = []; this.sideA = []; this.capU = width / 2 / curve.getLength();
     for (let i = 0; i <= segs; i++) {
       const u = i / segs, a = turns * u * Math.PI * 2; this.A.push(curve.getPointAt(u));
       this.sideA.push(fr.normals[i].clone().multiplyScalar(Math.cos(a)).add(fr.binormals[i].clone().multiplyScalar(Math.sin(a))));
     }
-    const n = (segs + 1) * 4, col = new Float32Array(n * 3), A = new THREE.Color(cA), B = new THREE.Color(cB), c = new THREE.Color();
-    for (let i = 0; i <= segs; i++) { c.copy(A).lerp(B, Math.sin(Math.PI * i / segs) ** 2 * .9 + eio(i / segs) * .1); for (let k = 0; k < 4; k++) col.set([c.r, c.g, c.b], (i * 4 + k) * 3); }
+    const n = (segs + 1) * PM, col = new Float32Array(n * 3), A = new THREE.Color(cA), B = new THREE.Color(cB), c = new THREE.Color();
+    for (let i = 0; i <= segs; i++) { c.copy(A).lerp(B, Math.sin(Math.PI * i / segs) ** 2 * .9 + eio(i / segs) * .1); for (let k = 0; k < PM; k++) col.set([c.r, c.g, c.b], (i * PM + k) * 3); }
     const g = this.geo = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setIndex(slabIndex(segs));
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setIndex(ringIndex(segs));
     this.mesh = new THREE.Mesh(g, satin(env)); this.mesh.castShadow = this.mesh.receiveShadow = true; this.mesh.frustumCulled = false; INTRO.add(this.mesh);
   }
   /* M: morph progress 0..1 (staggered along the band), t: time for ring precession */
@@ -98,11 +109,11 @@ class MorphRibbon {
     }
     for (let i = 0; i <= segs; i++) {
       const T = P[Math.min(segs, i + 1)].clone().sub(P[Math.max(0, i - 1)]).normalize(), side = S[i].addScaledVector(T, -S[i].dot(T)).normalize(), face = new THREE.Vector3().crossVectors(T, side).normalize();
-      const u = i / segs, taper = lerp(Math.min(1, u / .06, (1 - u) / .06), 1, P[i].m), w = width * (.15 + .85 * Math.sqrt(Math.max(0, taper)));
-      let k = i * 12; for (const [s, f] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) { const p = P[i]; pos[k++] = p.x + side.x * s * w / 2 + face.x * f * thick / 2; pos[k++] = p.y + side.y * s * w / 2 + face.y * f * thick / 2; pos[k++] = p.z + side.z * s * w / 2 + face.z * f * thick / 2; }
+      const u = i / segs, taper = lerp(Math.min(1, u / .06, (1 - u) / .06), 1, P[i].m), w = width * (.15 + .85 * Math.sqrt(Math.max(0, taper))) * Math.min(tipCap(head - u, this.capU), tail > 0 ? tipCap(u - tail, this.capU) : 1);
+      writeRing(pos, i, P[i], side, face, w / 2, thick / 2, .12);
     }
     this.geo.attributes.position.needsUpdate = true; this.geo.computeVertexNormals();
-    const a = Math.floor(clamp(tail) * segs), z = Math.floor(clamp(head) * segs);
+    const a = Math.floor(clamp(tail) * segs), z = Math.ceil(clamp(head) * segs);
     this.mesh.visible = z > a; this.geo.setDrawRange(a * PER, Math.max(0, z - a) * PER);
   }
 }
@@ -229,19 +240,23 @@ function motes(parent, n, seed, box) {
 }
 
 /* ---------------- static satin ribbons for the service scenes ---------------- */
-function ribbonGeometry(points, { width = .3, turns = 1, segs = 400, cA, cB, thick = .016 }) {
-  const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal'), fr = curve.computeFrenetFrames(segs, false), pos = [], col = [];
-  const A = new THREE.Color(cA), B = new THREE.Color(cB), c = new THREE.Color();
-  for (let i = 0; i <= segs; i++) {
-    const u = i / segs, p = curve.getPointAt(u), a = turns * u * Math.PI * 2, side = fr.normals[i].clone().multiplyScalar(Math.cos(a)).add(fr.binormals[i].clone().multiplyScalar(Math.sin(a))), face = new THREE.Vector3().crossVectors(fr.tangents[i], side).normalize();
-    const taper = Math.min(1, u / .06, (1 - u) / .06), w = width * (.15 + .85 * Math.sqrt(Math.max(0, taper))); c.copy(A).lerp(B, eio(u));
-    for (const [s, f] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) { const v = p.clone().addScaledVector(side, s * w / 2).addScaledVector(face, f * thick / 2); pos.push(v.x, v.y, v.z); col.push(c.r, c.g, c.b); }
-  }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(slabIndex(segs)); g.computeVertexNormals(); g.userData.segs = segs; return g;
-}
 class Ribbon {
-  constructor(parent, points, opts) { this.geo = ribbonGeometry(points, opts); this.mesh = new THREE.Mesh(this.geo, satin(opts.env ?? .3)); this.mesh.castShadow = true; parent.add(this.mesh); }
-  show(tail, head) { const n = this.geo.userData.segs, a = Math.floor(clamp(tail) * n), b = Math.floor(clamp(head) * n); this.mesh.visible = b > a; this.geo.setDrawRange(a * PER, Math.max(0, b - a) * PER); }
+  constructor(parent, points, { width = .3, turns = 1, segs = 400, cA, cB, thick = .045, env = .3 }) {
+    const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal'), fr = curve.computeFrenetFrames(segs, false), col = [];
+    const A = new THREE.Color(cA), B = new THREE.Color(cB), c = new THREE.Color(); this.R = []; Object.assign(this, { segs, thick, capU: width / 2 / curve.getLength() });
+    for (let i = 0; i <= segs; i++) {
+      const u = i / segs, p = curve.getPointAt(u), a = turns * u * Math.PI * 2, side = fr.normals[i].clone().multiplyScalar(Math.cos(a)).add(fr.binormals[i].clone().multiplyScalar(Math.sin(a))), face = new THREE.Vector3().crossVectors(fr.tangents[i], side).normalize();
+      const taper = Math.min(1, u / .06, (1 - u) / .06); this.R.push({ p, side, face, w: width * (.15 + .85 * Math.sqrt(Math.max(0, taper))) }); c.copy(A).lerp(B, eio(u)); for (let k = 0; k < PM; k++) col.push(c.r, c.g, c.b);
+    }
+    const g = this.geo = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array((segs + 1) * PM * 3), 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(ringIndex(segs));
+    this.write(0, segs, () => 1); g.computeVertexNormals();
+    this.mesh = new THREE.Mesh(g, satin(env)); this.mesh.castShadow = true; this.mesh.frustumCulled = false; parent.add(this.mesh);
+  }
+  write(a, b, f) { const pos = this.geo.attributes.position.array; for (let i = a; i <= b; i++) { const { p, side, face, w } = this.R[i]; writeRing(pos, i, p, side, face, w * f(i / this.segs) / 2, this.thick / 2, .12); } this.geo.attributes.position.needsUpdate = true; }
+  show(tail, head) {
+    const n = this.segs, a = Math.floor(clamp(tail) * n), b = Math.ceil(clamp(head) * n); this.mesh.visible = b > a; if (!this.mesh.visible) return;
+    this.write(a, b, u => Math.min(tipCap(head - u, this.capU), tail > 0 ? tipCap(u - tail, this.capU) : 1)); this.geo.setDrawRange(a * PER, Math.max(0, b - a) * PER);
+  }
 }
 /* a band that enters from off-frame, circles a centre (behind, then in front) while rising, and leaves */
 function swirl(c, rx, rz, y0, y1, { turns = 1.15, a0 = Math.PI, dir = 1, n = 12 } = {}) {
@@ -262,20 +277,24 @@ function buildBackdrop(tex) {
    A wide satin band laid along the frame diagonal. It is wide enough to cover
    the whole frame while centred, so the cut happens fully behind it. */
 const WIPE = (() => {
-  const segs = 160, dz = -4, hh = -dz * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), hw = hh * W / H;
-  const dir = V3(hw, hh, 0).normalize(), nrm = V3(-dir.y, dir.x, 0), width = 2 * (2 * hw * 2 * hh) / Math.hypot(2 * hw, 2 * hh) * 1.12;
-  const pos = [], col = [], cs = ['#B0175E', '#4A2C8A', '#1677A8'].map(c => new THREE.Color(c)), c = new THREE.Color();
+  const segs = 160, dz = -4, hh = -dz * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), hw = hh * W / H, span = 1.9 * Math.hypot(hw, hh);
+  const dir = V3(hw, hh, 0).normalize(), nrm = V3(-dir.y, dir.x, 0), width = 2 * (2 * hw * 2 * hh) / Math.hypot(2 * hw, 2 * hh) * 1.12, capU = width / 2 / (2 * span);
+  const R = [], col = [], cs = ['#B0175E', '#4A2C8A', '#1677A8'].map(c => new THREE.Color(c)), c = new THREE.Color();
   for (let i = 0; i <= segs; i++) {
-    const u = i / segs, s = lerp(-1.9, 1.9, u) * Math.hypot(hw, hh), p = dir.clone().multiplyScalar(s).addScaledVector(nrm, .25 * Math.sin(u * Math.PI * 2)).add(V3(0, 0, dz + .3 * Math.sin(u * Math.PI)));
-    const tw = .5 * Math.sin(u * Math.PI * 2.5), side = nrm.clone().multiplyScalar(Math.cos(tw)).add(V3(0, 0, Math.sin(tw))), face = new THREE.Vector3().crossVectors(dir, side).normalize();
-    if (u < .5) c.copy(cs[0]).lerp(cs[1], u * 2); else c.copy(cs[1]).lerp(cs[2], u * 2 - 1);
-    for (const [sd, f] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) { const v = p.clone().addScaledVector(side, sd * width / 2).addScaledVector(face, f * .01); pos.push(v.x, v.y, v.z); col.push(c.r, c.g, c.b); }
+    const u = i / segs, p = dir.clone().multiplyScalar(lerp(-span, span, u)).addScaledVector(nrm, .25 * Math.sin(u * Math.PI * 2)).add(V3(0, 0, dz + .3 * Math.sin(u * Math.PI)));
+    const tw = .5 * Math.sin(u * Math.PI * 2.5), side = nrm.clone().multiplyScalar(Math.cos(tw)).add(V3(0, 0, Math.sin(tw))), face = new THREE.Vector3().crossVectors(dir, side).normalize(); R.push({ p, side, face });
+    if (u < .5) c.copy(cs[0]).lerp(cs[1], u * 2); else c.copy(cs[1]).lerp(cs[2], u * 2 - 1); for (let k = 0; k < PM; k++) col.push(c.r, c.g, c.b);
   }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(slabIndex(segs)); g.computeVertexNormals();
-  const wm = satin(.06); wm.clearcoat = .25; wm.roughness = .45; const mesh = new THREE.Mesh(g, wm); mesh.renderOrder = 10; camera.add(mesh);
+  const g = new THREE.BufferGeometry(), pos = new Float32Array((segs + 1) * PM * 3); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(ringIndex(segs));
+  const write = f => { for (let i = 0; i <= segs; i++) { const { p, side, face } = R[i]; writeRing(pos, i, p, side, face, width * f(i / segs) / 2, .07, .05); } g.attributes.position.needsUpdate = true; };
+  write(() => 1); g.computeVertexNormals();
+  const wm = satin(.06); wm.clearcoat = .25; wm.roughness = .45; const mesh = new THREE.Mesh(g, wm); mesh.renderOrder = 10; mesh.frustumCulled = false; camera.add(mesh);
   const f = t => {
     mesh.visible = false;
-    for (const s of SW) if (t > s - .55 && t < s + .7) { const head = eio(pr(t, s - .5, s + .25)), tail = eio(pr(t, s - .12, s + .65)), a = Math.floor(tail * segs), b = Math.floor(head * segs); mesh.visible = b > a; g.setDrawRange(a * PER, Math.max(0, b - a) * PER); }
+    for (const s of SW) if (t > s - .55 && t < s + .7) {
+      const head = eio(pr(t, s - .5, s + .25)) * (1 + capU) , tail = eio(pr(t, s - .12, s + .65)) * (1 + capU) - capU * .0, a = Math.floor(clamp(tail) * segs), b = Math.ceil(clamp(head) * segs);
+      mesh.visible = b > a; write(u => Math.min(tipCap(head - u, capU), tail > 0 ? tipCap(u - tail, capU) : 1)); g.setDrawRange(a * PER, Math.max(0, b - a) * PER);
+    }
   };
   f.mesh = mesh; return f;
 })();
@@ -290,16 +309,20 @@ function svcCam(u, { a0 = .16, a1 = -.12, lx = 0, len = 4.8 } = {}) {
    A canvas drawn every frame and warped onto the screen quad of a card (corners
    measured per image, in image fractions), so app content plays INSIDE the
    device: camera views, try-on, lenses. */
+function roundMask(cw, ch, r) { const c = document.createElement('canvas'); c.width = cw; c.height = ch; const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cw, ch); g.fillStyle = '#fff'; g.beginPath(); g.roundRect(3, 3, cw - 6, ch - 6, r); g.fill(); return new THREE.CanvasTexture(c); }
 class Screen {
-  constructor(card, quad, cw, ch, radius = 28) {
+  constructor(card, quad, cw, ch, radius = 28, base = null) {
     this.cv = document.createElement('canvas'); this.cv.width = cw; this.cv.height = ch; this.g = this.cv.getContext('2d'); this.radius = radius;
     this.tex = new THREE.CanvasTexture(this.cv); this.tex.colorSpace = THREE.SRGBColorSpace; this.tex.anisotropy = 8;
-    const geo = new THREE.PlaneGeometry(1, 1, 12, 12), p = geo.attributes.position, Cq = quad.map(([fx, fy]) => [(fx - .5) * card.w, (1 - fy) * card.h - card.pad]);
+    const cxq = quad.reduce((a, q) => a + q[0], 0) / 4, cyq = quad.reduce((a, q) => a + q[1], 0) / 4, inset = .985; // pull 1.5% inside the device bezel
+    const geo = new THREE.PlaneGeometry(1, 1, 12, 12), p = geo.attributes.position, Cq = quad.map(([fx, fy]) => [(cxq + (fx - cxq) * inset - .5) * card.w, (1 - (cyq + (fy - cyq) * inset)) * card.h - card.pad]);
     for (let i = 0; i < p.count; i++) { const u = p.getX(i) + .5, v = .5 - p.getY(i), tx = lerp(Cq[0][0], Cq[1][0], u), ty = lerp(Cq[0][1], Cq[1][1], u), bx = lerp(Cq[3][0], Cq[2][0], u), by = lerp(Cq[3][1], Cq[2][1], u); p.setXYZ(i, lerp(tx, bx, v), lerp(ty, by, v), .004); }
-    this.mat = new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, depthWrite: false, opacity: 0 }); this.mesh = new THREE.Mesh(geo, this.mat); card.pivot.add(this.mesh);
+    const mask = roundMask(cw, ch, radius);
+    if (base) { this.bmat = new THREE.MeshBasicMaterial({ map: base, alphaMap: mask, transparent: true, depthWrite: false, opacity: 0 }); this.bmesh = new THREE.Mesh(geo, this.bmat); card.pivot.add(this.bmesh); }
+    this.mat = new THREE.MeshBasicMaterial({ map: this.tex, alphaMap: mask, transparent: true, depthWrite: false, opacity: 0 }); this.mesh = new THREE.Mesh(geo, this.mat); card.pivot.add(this.mesh);
   }
   begin() { const { g, cv, radius: r } = this; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.clearRect(0, 0, cv.width, cv.height); g.save(); g.beginPath(); g.roundRect(0, 0, cv.width, cv.height, r); g.clip(); return g; }
-  end(op) { this.g.restore(); this.tex.needsUpdate = true; this.mat.opacity = op; this.mesh.visible = op > .001; }
+  end(op) { this.g.restore(); this.tex.needsUpdate = true; this.mat.opacity = op; this.mesh.visible = op > .001; if (this.bmat) { this.bmat.opacity = op; this.bmesh.visible = op > .001; } }
 }
 const el = n => IMG[n].tex.image;
 /* draw an image so that its subject's bounding box (from meta) is h px tall, bottom of the box at (cx, by) */
@@ -330,34 +353,76 @@ function faceMesh(g, cx, cy, fw, fh, k, t) {
   g.save(); pts.forEach(([x, y], i) => { const q = clamp(k * 3 - (i / pts.length) * 2); if (q <= 0) return; g.fillStyle = rgba(i % 7 ? '#E8FBFF' : C.cyan, .85 * q); g.beginPath(); g.arc(x, y, 2.6 + .8 * Math.sin(t * 5 + i), 0, 6.283); g.fill(); });
   g.strokeStyle = rgba(C.cyan, .5 * clamp(k * 2)); g.lineWidth = 2; g.beginPath(); g.ellipse(cx, cy, fw / 2, fh / 2 * 1.04, 0, 0, 6.283); g.stroke(); g.restore();
 }
-function scene1(G) { // AR / WebAR products: the phone's camera view of the floor; a reticle, a tap, the product placed in AR
-  const phone = new Card('P01_phone', P(3.4, 3.5), G), sh = blob(G, 2.4, .8), scr = new Screen(phone, IMG.P01_phone.meta.screen, 560, 1180, 46);
-  const rib = new Ribbon(G, swirl(V3(0, 0, 0), P(2.5, 1.9), 1.3, .3, 2.7, { dir: -1 }), { cA: RIB[0][0], cB: RIB[0][1], width: .28, turns: 1.4 }), mo = motes(G, 60, 11, [5, 4, 3]);
+/* image target printed on the platform top: the XR mark inside high-contrast rings and shards (good tracking features) */
+function makeTarget() {
+  const c = document.createElement('canvas'); c.width = c.height = 1024; const g = c.getContext('2d'), o = 512, pal = ['#5B3F8F', '#E2367A', '#1677A8'];
+  g.fillStyle = '#F8EDE0'; g.beginPath(); g.arc(o, o, 512, 0, 6.283); g.fill();
+  [470, 405, 340, 275].forEach((r, ri) => { const n = 10 + ri * 4; g.lineWidth = 30 - ri * 4; g.lineCap = 'round'; for (let k = 0; k < n; k++) if (hash(ri * 50 + k) > .3) { g.strokeStyle = pal[(k + ri) % 3]; const a0 = k / n * 6.283 + ri * .3, a1 = a0 + (.4 + .5 * hash(ri * 50 + k + 7)) * 6.283 / n; g.beginPath(); g.arc(o, o, r, a0, a1); g.stroke(); } });
+  for (let k = 0; k < 26; k++) { const a = hash(k + 300) * 6.283, r = 200 + 260 * hash(k + 400), s2 = 16 + 22 * hash(k + 500), x = o + Math.cos(a) * r, y = o + Math.sin(a) * r; g.fillStyle = pal[k % 3]; g.beginPath(); g.moveTo(x, y - s2); g.lineTo(x + s2, y + s2 * .8); g.lineTo(x - s2, y + s2 * .8); g.closePath(); g.fill(); }
+  g.fillStyle = '#1d1440'; g.beginPath(); g.arc(o, o, 205, 0, 6.283); g.fill(); g.strokeStyle = '#F8EDE0'; g.lineWidth = 8; g.beginPath(); g.arc(o, o, 190, 0, 6.283); g.stroke();
+  const mk = IMG.mark.tex.image, mw = 300, mh = mw * mk.height / mk.width; g.drawImage(mk, o - mw / 2, o - mh / 2, mw, mh);
+  g.strokeStyle = '#5B3F8F'; g.lineWidth = 10; g.beginPath(); g.arc(o, o, 505, 0, 6.283); g.stroke();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+function scene1(G) { // AR with an image target: a real platform carries the printed tracker; the phone's camera finds it and the product appears on it — only on screen
+  const PRAD = .95, PH = .28, plx = P(1.0, 1.0), plz = P(-.8, -1.3);
+  const phone = new Card('P01_phone', P(2.9, 2.75), G), sh = blob(G, 1.8, .6);
+  const rt = new THREE.WebGLRenderTarget(480, 1120, { samples: 4 }), pcam = new THREE.PerspectiveCamera(46, 480 / 1120, .05, 120); pcam.layers.enable(1);
+  const scr = new Screen(phone, IMG.P01_phone.meta.screen, 480, 1120, 64, rt.texture);
+  // the physical platform (seen by both cameras)
+  const plat = new THREE.Group(); plat.position.set(plx, 0, plz); G.add(plat);
+  const pearl = new THREE.MeshPhysicalMaterial({ color: 0x9d8fc0, roughness: .38, metalness: .1, clearcoat: .6, clearcoatRoughness: .25, sheen: .3, sheenColor: new THREE.Color(0xb9a6ff), envMapIntensity: .3 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(PRAD, PRAD * 1.05, PH, 120, 1, true), pearl); body.position.y = PH / 2; body.castShadow = true; plat.add(body);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(PRAD, .03, 16, 160), pearl); lip.rotation.x = Math.PI / 2; lip.position.y = PH; plat.add(lip);
+  for (const [r, y, col] of [[PRAD * 1.052, .035, 0xE2367A], [PRAD * 1.03, PH * .55, 0x4FC3E0]]) { const n = new THREE.Mesh(new THREE.TorusGeometry(r, .009, 8, 160), new THREE.MeshBasicMaterial({ color: col })); n.rotation.x = Math.PI / 2; n.position.y = y; plat.add(n); }
+  const tgt = makeTarget(), top = new THREE.Mesh(new THREE.CircleGeometry(PRAD, 120), new THREE.MeshStandardMaterial({ map: tgt, roughness: .55, color: 0xb8b0c8, emissive: 0xffffff, emissiveMap: tgt, emissiveIntensity: .08 })); top.rotation.x = -Math.PI / 2; top.position.y = PH + .002; plat.add(top);
+  const psh = blob(G, 2.6, 2.6); psh.position.set(plx, .004, plz); psh.material.opacity = .55;
+  // AR content: rendered only by the phone camera (layer 1)
+  const ar = new THREE.Group(); G.add(ar);
+  const perf = new Card('P02_product', 1.55, ar), halo = holoRing(ar, PRAD * .82);
+  const fl = new THREE.Mesh(new THREE.CircleGeometry(5, 64), new THREE.MeshStandardMaterial({ color: 0x150f2b, roughness: .35, metalness: .3, transparent: true, alphaMap: blobTex, opacity: .95 })); fl.rotation.x = -Math.PI / 2; fl.position.set(plx, .001, plz); ar.add(fl);
+  ar.traverse(o => o.layers.set(1));
+  const rib = new Ribbon(G, swirl(V3(P(-.2, 0), 0, 0), P(2.6, 1.9), 1.4, .3, 2.8, { dir: -1 }), { cA: RIB[0][0], cB: RIB[0][1], width: .28, turns: 1.2 }), mo = motes(G, 60, 11, [5, 4, 3]);
+  const proj = v => { const q = v.clone().project(pcam); return [(q.x + 1) / 2 * 480, (1 - q.y) / 2 * 1120]; };
   return (u, t) => {
-    const len = LEN(1); svcCam(u, { a0: .2, a1: -.1, len }); mo.set(u);
-    const bob = .05 * Math.sin(u * 2), px = P(-.2, -.1), py = P(.2, .3) + bob;
-    phone.set({ x: px, y: py, z: 0, rev: eio(pr(u, .1, .9)), rz: .03 * Math.sin(u * 1.2) });
-    sh.position.set(px, .004, .2); sh.material.opacity = .8;
-    // screen: live camera view of the studio floor (gentle hand drift), AR reticle, tap, product placed
-    const g = scr.begin(), cw = 560, ch = 1180, cx = cw / 2 + 10 * Math.sin(u * .9), gy = ch * .68;
-    drawCover(g, 'BG02_studio_horizontal', -40 + 14 * Math.sin(u * .8), -30, cw + 80, ch + 60, .5, .78, 1.9);
-    g.fillStyle = 'rgba(8,6,20,.25)'; g.fillRect(0, 0, cw, ch);
-    const rk = eo5(pr(u, .9, 1.4)), placed = pr(u, 1.9, 2.5), rr = 120;
-    if (rk > 0) { g.save(); g.globalAlpha = rk * (1 - .7 * placed); g.strokeStyle = '#ffffff'; g.lineWidth = 5; g.beginPath(); g.ellipse(cx, gy, rr * rk, rr * .32 * rk, 0, 0, 6.283); g.stroke(); g.setLineDash([14, 12]); g.lineDashOffset = -u * 40; g.strokeStyle = C.cyan; g.beginPath(); g.ellipse(cx, gy, rr * 1.35 * rk, rr * .43 * rk, 0, 0, 6.283); g.stroke(); g.restore(); }
-    if (rk > 0 && placed <= 0) { g.save(); g.globalAlpha = rk; uiFont(g, 700, 26); g.textAlign = 'center'; pill(g, cx - 130, gy + 80, 260, 50, 'rgba(10,8,24,.6)', rgba(C.cyan, .8)); g.fillStyle = '#fff'; g.fillText('TAP TO PLACE', cx, gy + 114); g.restore(); }
-    ripple(g, cx, gy, pr(u, 1.75, 2.25));
-    if (placed > 0) {
-      const b = eo5(placed), pop = 1 + .12 * Math.sin(placed * Math.PI) * (1 - placed), hgt = 470 * b * pop;
-      g.save(); g.fillStyle = 'rgba(0,0,0,.45)'; g.beginPath(); g.ellipse(cx, gy + 6, 120 * b, 30 * b, 0, 0, 6.283); g.fill(); g.restore();
-      g.save(); g.translate(cx, gy + 10); g.rotate(.06 * Math.sin(u * 1.4) * b); drawFigure(g, 'P02_product', 0, 0, hgt); g.restore();
-      sparkles(g, cx, gy - 200, 260, pr(u, 1.9, 2.8), 31);
-      g.save(); g.globalAlpha = pr(u, 2.6, 3.0); pill(g, cx - 110, 120, 220, 52, 'rgba(10,8,24,.55)', rgba(C.cyan, .9)); uiFont(g, 700, 24); g.textAlign = 'center'; g.fillStyle = C.cyan; g.fillText('3D · 360°', cx, 154); g.restore();
+    const len = LEN(1); svcCam(u, { a0: .16, a1: -.12, len }); mo.set(u);
+    const px = P(-1.25, -.75), py = P(.45, .4) + .04 * Math.sin(u * 1.8), pz = P(1.5, 1.7);
+    phone.set({ x: px, y: py, z: pz, rev: eio(pr(u, .1, .9)), rz: .02 * Math.sin(u * 1.1), face: .9 });
+    sh.position.set(px, .004, pz); sh.material.opacity = .7;
+    // the phone's camera: from the phone, aimed at the platform (hand drift)
+    pcam.position.set(px + .05 * Math.sin(u * .9), py + phone.h * .55, pz); pcam.lookAt(plx + .06 * Math.sin(u * .7), PH + .55, plz); pcam.updateMatrixWorld(true);
+    // AR content on the target
+    const found = pr(u, 1.55, 1.9), appear = pr(u, 1.9, 2.6), b = eo5(appear), pop = 1 + .14 * Math.sin(appear * Math.PI) * (1 - appear);
+    perf.set({ x: plx, y: PH + .01, z: plz, s: Math.max(.001, b * pop), op: appear > 0 ? 1 : 0, rz: .04 * Math.sin(u * 1.5) * b });
+    perf.root.rotation.y = Math.atan2(pcam.position.x - plx, pcam.position.z - plz);
+    halo.position.set(plx, PH + .012, plz); halo.set(found * (1 - .5 * pr(u, 2.6, 3.2)), u);
+    // render the live camera feed (phone itself hidden, studio image as the room behind)
+    const keepBg = scene.background; phone.root.visible = false; BGP.visible = false; rib.mesh.visible = false; mo.visible = false; scene.background = IMG.BG01_studio_vertical.tex;
+    renderer.setRenderTarget(rt); renderer.render(scene, pcam); renderer.setRenderTarget(null);
+    scene.background = keepBg; phone.root.visible = true; BGP.visible = true; mo.visible = true; rib.show(.55 * eio(pr(u, 2.4, len)), eo(pr(u, .3, 2.8)));
+    // app UI over the feed
+    const g = scr.begin(), cw = 480, ch = 1120;
+    const pts = [[PRAD, 0], [-PRAD, 0], [0, PRAD], [0, -PRAD]].map(([dx, dz]) => proj(V3(plx + dx, PH, plz + dz)));
+    const tx0 = Math.min(...pts.map(q => q[0])) - 14, tx1 = Math.max(...pts.map(q => q[0])) + 14, ty0 = Math.min(...pts.map(q => q[1])) - 14, ty1 = Math.max(...pts.map(q => q[1])) + 14;
+    const scan = pr(u, .9, 1.55), fk = eo5(found);
+    if (scan > 0) { // search frame closes onto the target, then locks
+      const bx0 = lerp(70, tx0, fk), bx1 = lerp(cw - 70, tx1, fk), by0 = lerp(ch * .3, ty0, fk), by1 = lerp(ch * .72, ty1, fk), L = Math.min(bx1 - bx0, by1 - by0) * .22;
+      g.save(); g.globalAlpha = eo(pr(u, .9, 1.1)) * (1 - pr(u, 2.9, 3.3)); g.strokeStyle = found > 0 ? C.cyan : '#ffffff'; g.lineWidth = 6; g.lineCap = 'round'; g.lineJoin = 'round'; g.shadowColor = C.cyan; g.shadowBlur = found > 0 ? 14 : 0;
+      for (const [x, y, sx, sy] of [[bx0, by0, 1, 1], [bx1, by0, -1, 1], [bx1, by1, -1, -1], [bx0, by1, 1, -1]]) { g.beginPath(); g.moveTo(x, y + sy * L); g.arcTo(x, y, x + sx * L, y, L * .45); g.lineTo(x + sx * L, y); g.stroke(); }
+      if (found <= 0) { const yy = lerp(by0, by1, (u * 1.6) % 1); g.fillStyle = rgba(C.cyan, .6); g.fillRect(bx0 + 10, yy - 2, bx1 - bx0 - 20, 4); }
+      g.restore();
+      const label = found > 0 ? 'TARGET FOUND ✓' : 'SCAN THE TARGET', lw = found > 0 ? 300 : 320;
+      g.save(); g.globalAlpha = eo(pr(u, .9, 1.1)) * (1 - pr(u, 2.6, 2.9)); pill(g, cw / 2 - lw / 2, ch - 250, lw, 54, 'rgba(10,8,24,.6)', found > 0 ? C.cyan : 'rgba(255,255,255,.6)'); uiFont(g, 700, 24); g.textAlign = 'center'; g.fillStyle = found > 0 ? C.cyan : '#fff'; g.fillText(label, cw / 2, ch - 214); g.restore();
     }
-    g.save(); uiFont(g, 700, 22); g.fillStyle = 'rgba(255,255,255,.85)'; g.textAlign = 'left'; g.fillText('● AR VIEW', 40, 70); g.restore();
-    g.save(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 6; g.beginPath(); g.arc(cw / 2, ch - 110, 46, 0, 6.283); g.stroke(); g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(cw / 2, ch - 110, 36, 0, 6.283); g.fill(); g.restore();
+    const pc = proj(V3(plx, PH + .8, plz)); sparkles(g, pc[0], pc[1], 220, pr(u, 1.9, 2.8), 31);
+    g.save(); g.globalAlpha = pr(u, 2.7, 3.1); pill(g, cw / 2 - 100, 120, 200, 50, 'rgba(10,8,24,.55)', rgba(C.cyan, .9)); uiFont(g, 700, 22); g.textAlign = 'center'; g.fillStyle = C.cyan; g.fillText('3D · 360°', cw / 2, 153); g.restore();
+    g.save(); uiFont(g, 700, 20); g.fillStyle = 'rgba(255,255,255,.85)'; g.textAlign = 'left'; g.fillText('● AR CAMERA', 46, 72); g.restore();
+    g.save(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 6; g.beginPath(); g.arc(cw / 2, ch - 105, 42, 0, 6.283); g.stroke(); g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(cw / 2, ch - 105, 33, 0, 6.283); g.fill(); g.restore();
     scr.end(eo(pr(u, .6, 1.0)));
     rib.show(.55 * eio(pr(u, 2.4, len)), eo(pr(u, .3, 2.8)));
-    return [{ c: phone.rect(...IMG.P01_phone.meta.screen.reduce((a, [x, y]) => [Math.min(a[0], x), Math.min(a[1], y), Math.max(a[2], x), Math.max(a[3], y)], [1, 1, 0, 0])), k: pr(u, 2.6, 3.3), a: 'AR · WEBAR', b: '● PLACED' }];
+    const tp = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, c2]) => { const v = V3(plx + a * PRAD, PH, plz + c2 * PRAD * .5).project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; });
+    return [{ c: tp, k: pr(u, .9, 1.5) * (1 - pr(u, 2.2, 2.5)), a: 'IMAGE TARGET', b: null },
+            { c: phone.rect(.23, .03, .76, .91), k: pr(u, 2.5, 3.1), a: 'AR · WEBAR', b: '● PLACED' }];
   };
 }
 function scene2(G) { // interactive exhibitions & events
@@ -374,7 +439,7 @@ function scene2(G) { // interactive exhibitions & events
 function scene3(G) { // AR mirror: she stands in front of it in her own clothes; only her reflection changes outfits. Then the same on a phone.
   const mirror = new Card('M01_ar_mirror', P(3.55, 3.75), G, { refl: true }), girl = new Card('A06_body_back', P(3.3, 3.35), G, { refl: true });
   const phone = new Card('P01_phone', P(2.3, 1.9), G), sh = blob(G, 1.6, .55);
-  const ms = new Screen(mirror, IMG.M01_ar_mirror.meta.screen, 480, 2060, 10), ps = new Screen(phone, IMG.P01_phone.meta.screen, 520, 1100, 44);
+  const ms = new Screen(mirror, IMG.M01_ar_mirror.meta.screen, 480, 2060, 46), ps = new Screen(phone, IMG.P01_phone.meta.screen, 520, 1100, 70);
   const rib = new Ribbon(G, swirl(V3(P(-.2, -.1), 0, 0), P(2.4, 1.8), 1.4, .4, 3.1, { dir: -1 }), { cA: RIB[2][0], cB: RIB[2][1], width: .26, turns: 1.2 }), mo = motes(G, 60, 37, [5, 4, 3]);
   const LOOKS = ['A01_body_base', 'A02_body_outfit1', 'A03_body_outfit2'];
   const SWAP = [2.5, 4.1]; // outfit changes (tap at -0.35 s)
@@ -430,7 +495,7 @@ function scene4(G) { // immersive cultural & spatial storytelling
 }
 function scene5(G) { // lenses & effects: the selfie camera tracks her face, then the lens is applied
   const phone = new Card('F02_selfie_phone', P(4.1, 3.95), G, { refl: true }), icons = new Card('F03_effect_icons', P(2.0, 1.45), G), sh = blob(G, 1.8, .6);
-  const scr = new Screen(phone, IMG.F02_selfie_phone.meta.screen, 560, 1240, 40);
+  const scr = new Screen(phone, IMG.F02_selfie_phone.meta.screen, 560, 1240, 64);
   const rib = new Ribbon(G, swirl(V3(P(-.6, 0), 0, 0), P(2.4, 1.8), 1.3, .3, 3.0, { dir: -1 }), { cA: RIB[0][0], cB: RIB[1][0], width: .26, turns: -1.3 }), mo = motes(G, 70, 71, [5, 4, 3]);
   return (u, t) => {
     const len = LEN(5); svcCam(u, { a0: .16, a1: -.12, len }); mo.set(u);
@@ -493,8 +558,8 @@ function brackets(pts, k, labelA, labelB, fade = 1) {
   let x0 = Math.min(...pts.map(p => p[0])), x1 = Math.max(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1])), y1 = Math.max(...pts.map(p => p[1]));
   const pad = lerp(Math.min(W, H) * .16, 18, eo5(k)), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2; x0 -= pad; x1 += pad; y0 -= pad; y1 += pad;
   const L = Math.min(x1 - x0, y1 - y0) * .18, lock = pr(k, .8, 1), col = lock > 0 ? C.cyan : C.ink;
-  ctx.save(); ctx.globalAlpha = eo(pr(k, 0, .25)) * fade; ctx.strokeStyle = col; ctx.lineWidth = VERT ? 5 : 4; ctx.lineCap = 'square'; ctx.shadowColor = C.cyan; ctx.shadowBlur = 18 * (.4 + lock);
-  for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]]) { ctx.beginPath(); ctx.moveTo(x, y + sy * L); ctx.lineTo(x, y); ctx.lineTo(x + sx * L, y); ctx.stroke(); }
+  ctx.save(); ctx.globalAlpha = eo(pr(k, 0, .25)) * fade; ctx.strokeStyle = col; ctx.lineWidth = VERT ? 5 : 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.shadowColor = C.cyan; ctx.shadowBlur = 18 * (.4 + lock);
+  for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]]) { ctx.beginPath(); ctx.moveTo(x, y + sy * L); ctx.arcTo(x, y, x + sx * L, y, L * .45); ctx.lineTo(x + sx * L, y); ctx.stroke(); }
   const s = pr(k, .3, 1.15); if (s > 0 && s < 1) { const yy = lerp(y0, y1, eio(s)), gr = ctx.createLinearGradient(0, yy - 40, 0, yy); gr.addColorStop(0, rgba(C.cyan, 0)); gr.addColorStop(1, rgba(C.cyan, .3)); ctx.fillStyle = gr; ctx.fillRect(x0, yy - 40, x1 - x0, 40); ctx.fillStyle = C.cyan; ctx.fillRect(x0, yy - 1.5, x1 - x0, 3); }
   ctx.globalAlpha *= lock; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.stroke();
   font(500, VERT ? 24 : 19, '"JBM", monospace'); ctx.letterSpacing = '4px'; ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.fillStyle = C.cyan; ctx.fillText(labelA, x0, y0 - 14);
