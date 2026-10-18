@@ -209,6 +209,8 @@ void main(){
 }`;
 const cardMat = (tex, refl = 0) => new THREE.ShaderMaterial({ uniforms: { map: { value: tex }, op: { value: 1 }, rev: { value: 1 }, refl: { value: refl }, dim: { value: 1 }, edge: { value: new THREE.Color(0x6fe3ff) } }, vertexShader: CARD_VS, fragmentShader: CARD_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide });
 const IMG = {};
+/* device body outline in image fractions: the fitted screen quad pushed outward by m (bezel) along its diagonals */
+function bodyQuad(name, m) { const q = IMG[name].meta.screen, c = q.reduce((a, p) => [a[0] + p[0] / 4, a[1] + p[1] / 4], [0, 0]); return q.map(([x, y]) => { const dx = x - c[0], dy = y - c[1], d = Math.hypot(dx, dy); return [x + dx / d * m, y + dy / d * m]; }); }
 class Card {
   constructor(name, h, parent, { refl = false, tex } = {}) {
     const im = tex || IMG[name], m = im.meta, w = h * m.w / m.h, pad = m.bot * h;
@@ -225,6 +227,7 @@ class Card {
     for (const mt of [this.mat, this.rmat]) if (mt) { mt.uniforms.op.value = op; mt.uniforms.rev.value = rev; }
   }
   /* screen corners of a sub-rectangle given in image fractions (fy from the top) */
+  quad(fr) { this.root.updateMatrixWorld(true); return fr.map(([fx, fy]) => { const v = V3((fx - .5) * this.w, (1 - fy) * this.h - this.pad, 0).applyMatrix4(this.mesh.matrixWorld).project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; }); }
   rect(fx0, fy0, fx1, fy1) {
     this.root.updateMatrixWorld(true);
     return [[fx0, fy0], [fx1, fy0], [fx1, fy1], [fx0, fy1]].map(([fx, fy]) => { const v = V3((fx - .5) * this.w, (1 - fy) * this.h - this.pad, 0).applyMatrix4(this.mesh.matrixWorld).project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; });
@@ -398,12 +401,13 @@ function platformComposite() {
   if (PLAT) return PLAT;
   const im = el('P03_platform'), F = IMG.P03_platform.meta.face, c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d');
   g.drawImage(im, 0, 0);
-  const th = -.42, hs = .5, M = [F.a * Math.cos(th), F.b * Math.sin(th), -F.a * Math.sin(th), F.b * Math.cos(th), F.cx, F.cy];
-  const toImg = (u, v) => [M[4] + M[0] * u + M[2] * v, M[5] + M[1] * u + M[3] * v];
-  g.save(); g.setTransform(...M); g.shadowColor = 'rgba(40,20,70,.35)'; g.shadowBlur = 18; g.fillStyle = '#efe7dc'; g.beginPath(); g.roundRect(-hs, -hs, 2 * hs, 2 * hs, .04); g.fill(); g.restore();
-  g.save(); g.setTransform(...M); g.beginPath(); g.roundRect(-hs, -hs, 2 * hs, 2 * hs, .04); g.clip(); g.drawImage(makeTarget().image, -hs, -hs, 2 * hs, 2 * hs); g.restore();
+  // the mark lies flat on the top face: plane coords (u, v) in units of the face radius -> image px
+  const M = [F.a, 0, 0, F.b, F.cx, F.cy], toImg = (u, v) => [M[4] + M[0] * u + M[2] * v, M[5] + M[1] * u + M[3] * v];
+  const mk = IMG.mark.tex.image, hw = .62, hh = hw * mk.height / mk.width;
+  g.save(); g.setTransform(...M); g.globalAlpha = .96; g.drawImage(mk, -hw, -hh, 2 * hw, 2 * hh); g.restore();
+  const hs = 1; // (corners below = the mark's footprint)
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-  PLAT = { canvas: c, tex, corners: [[-hs, -hs], [hs, -hs], [hs, hs], [-hs, hs]].map(([u, v]) => toImg(u, v)), centre: [F.cx, F.cy], meta: IMG.P03_platform.meta };
+  PLAT = { canvas: c, tex, corners: [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([u, v]) => toImg(u * 1.08, v * 1.15)), centre: [F.cx, F.cy], meta: IMG.P03_platform.meta };
   return PLAT;
 }
 function scene1(G) { // AR with an image target: the printed card on a real podium; the phone's camera finds it and the product appears on it — only on screen
@@ -450,7 +454,7 @@ function scene1(G) { // AR with an image target: the printed card on a real podi
     scr.end(eo(pr(u, .6, 1.0)));
     rib.show(.55 * eio(pr(u, 2.4, len)), eo(pr(u, .3, 2.8)));
     return [{ c: pc.corners.map(([x, y]) => toView(plat, x, y)), k: pr(u, .9, 1.5) * (1 - pr(u, 2.2, 2.5)), a: 'IMAGE TARGET', b: null },
-            { c: phone.rect(.23, .03, .76, .91), k: pr(u, 2.5, 3.1), a: 'AR · WEBAR', b: '● PLACED' }];
+            { c: phone.quad(bodyQuad('P01_phone', .03)), k: pr(u, 2.5, 3.1), a: 'AR · WEBAR', b: '● PLACED' }];
   };
 }
 function scene2(G) { // interactive exhibitions & events
@@ -505,8 +509,8 @@ function scene3(G) { // AR mirror: she stands in front of it in her own clothes;
     pg.save(); uiFont(pg, 700, 24); pg.fillStyle = 'rgba(255,255,255,.85)'; pg.textAlign = 'center'; pg.fillText('VIRTUAL TRY-ON', 240, 1070); pg.restore();
     ps.end(pk);
     rib.show(.55 * eio(pr(u, 3.0, len)), eo(pr(u, .3, 3.0)));
-    return [{ c: mirror.rect(...[.32, .05, .67, .85]), k: pr(u, 1.0, 1.6) * (1 - pr(u, 4.4, 4.7)), a: 'BODY TRACKING', b: '● LIVE' },
-            { c: phone.rect(.23, .03, .76, .91), k: pr(u, 5.4, 6.0), a: 'TRY-ON · MOBILE', b: '● LIVE' }];
+    return [{ c: mirror.quad(bodyQuad('M01_ar_mirror', .012)), k: pr(u, 1.0, 1.6) * (1 - pr(u, 4.4, 4.7)), a: 'BODY TRACKING', b: '● LIVE' },
+            { c: phone.quad(bodyQuad('P01_phone', .03)), k: pr(u, 5.4, 6.0), a: 'TRY-ON · MOBILE', b: '● LIVE' }];
   };
 }
 function scene4(G) { // immersive cultural & spatial storytelling
@@ -547,7 +551,7 @@ function scene5(G) { // lenses & effects: the selfie camera tracks her face, the
     icons.set({ x: ix, y: iy, z: P(.7, 1.0), s: Math.max(.001, ia), rz: .08 * Math.sin(u * 1.6), op: ia > 0 ? 1 : 0 });
     sh.position.set(ix, .004, P(.7, 1.0)); sh.material.opacity = .45 * ia;
     rib.show(.55 * eio(pr(u, 2.4, len)), eo(pr(u, .3, 2.8)));
-    return [{ c: phone.rect(.26, .17, .75, .8), k: pr(u, 1.0, 1.6), a: 'FACE TRACKING', b: '● LENS ON' }];
+    return [{ c: phone.quad(bodyQuad('F02_selfie_phone', .015)), k: pr(u, 1.0, 1.6), a: 'FACE TRACKING', b: '● LENS ON' }];
   };
 }
 function outro(G) { // glass ring + the mark + call to action
@@ -581,17 +585,26 @@ function reveal(txt, x, y, size, weight, col, k, o = {}) {
   ctx.globalAlpha *= e; ctx.shadowColor = 'rgba(13,11,29,.7)'; ctx.shadowBlur = 24; ctx.fillStyle = col; ctx.fillText(txt, x, y + (1 - e) * size * .6); ctx.restore();
 }
 /* AR tracking brackets around four screen points; corners close in, lock, scan once */
+/* AR tracking brackets on any quad (screen px, any winding): corners follow the quad's own edges, so they hug
+   tilted devices exactly; they close in from 1.3x, lock, and scan once along the quad */
 function brackets(pts, k, labelA, labelB, fade = 1) {
   if (k <= 0 || fade <= 0) return;
-  let x0 = Math.min(...pts.map(p => p[0])), x1 = Math.max(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1])), y1 = Math.max(...pts.map(p => p[1]));
-  const pad = lerp(Math.min(W, H) * .16, 18, eo5(k)), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2; x0 -= pad; x1 += pad; y0 -= pad; y1 += pad;
-  const L = Math.min(x1 - x0, y1 - y0) * .18, lock = pr(k, .8, 1), col = lock > 0 ? C.cyan : C.ink;
-  ctx.save(); ctx.globalAlpha = eo(pr(k, 0, .25)) * fade; ctx.strokeStyle = col; ctx.lineWidth = VERT ? 5 : 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.shadowColor = C.cyan; ctx.shadowBlur = 18 * (.4 + lock);
-  for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]]) { ctx.beginPath(); ctx.moveTo(x, y + sy * L); ctx.arcTo(x, y, x + sx * L, y, L * .45); ctx.lineTo(x + sx * L, y); ctx.stroke(); }
-  const s = pr(k, .3, 1.15); if (s > 0 && s < 1) { const yy = lerp(y0, y1, eio(s)), gr = ctx.createLinearGradient(0, yy - 40, 0, yy); gr.addColorStop(0, rgba(C.cyan, 0)); gr.addColorStop(1, rgba(C.cyan, .3)); ctx.fillStyle = gr; ctx.fillRect(x0, yy - 40, x1 - x0, 40); ctx.fillStyle = C.cyan; ctx.fillRect(x0, yy - 1.5, x1 - x0, 3); }
-  ctx.globalAlpha *= lock; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.stroke();
-  font(500, VERT ? 24 : 19, '"JBM", monospace'); ctx.letterSpacing = '4px'; ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.fillStyle = C.cyan; ctx.fillText(labelA, x0, y0 - 14);
-  if (labelB) { ctx.textAlign = 'right'; ctx.fillStyle = C.mag; ctx.fillText(labelB, x1, y1 + (VERT ? 38 : 32)); }
+  const c = pts.reduce((a, p) => [a[0] + p[0] / 4, a[1] + p[1] / 4], [0, 0]), sc = lerp(1.3, 1, eo5(k)), lock = pr(k, .8, 1);
+  const Q = pts.map(([x, y]) => { const dx = x - c[0], dy = y - c[1], d = Math.hypot(dx, dy) || 1; return [c[0] + dx * sc + dx / d * 8, c[1] + dy * sc + dy / d * 8]; });
+  const edge = (a, b) => Math.hypot(Q[b][0] - Q[a][0], Q[b][1] - Q[a][1]), L = Math.min(edge(0, 1), edge(1, 2)) * .24;
+  ctx.save(); ctx.globalAlpha = eo(pr(k, 0, .25)) * fade; ctx.strokeStyle = lock > 0 ? C.cyan : C.ink; ctx.lineWidth = VERT ? 5 : 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.shadowColor = C.cyan; ctx.shadowBlur = 18 * (.4 + lock);
+  for (let i = 0; i < 4; i++) {
+    const p = Q[i], a = Q[(i + 3) % 4], b = Q[(i + 1) % 4], ua = [(a[0] - p[0]), (a[1] - p[1])], ub = [(b[0] - p[0]), (b[1] - p[1])], la = Math.hypot(...ua), lb = Math.hypot(...ub);
+    ctx.beginPath(); ctx.moveTo(p[0] + ua[0] / la * L, p[1] + ua[1] / la * L); ctx.arcTo(p[0], p[1], p[0] + ub[0] / lb * L, p[1] + ub[1] / lb * L, L * .9); ctx.lineTo(p[0] + ub[0] / lb * L, p[1] + ub[1] / lb * L); ctx.stroke();
+  }
+  // order for labels / scan: top-left = min(x+y), bottom-right = max(x+y)
+  const tl = Q.reduce((m, p) => p[0] + p[1] < m[0] + m[1] ? p : m), br = Q.reduce((m, p) => p[0] + p[1] > m[0] + m[1] ? p : m);
+  const iT = Q.indexOf(tl), top = [Q[iT], Q[(iT + 1) % 4]], bot = [Q[(iT + 3) % 4], Q[(iT + 2) % 4]];
+  const s = pr(k, .3, 1.15); if (s > 0 && s < 1) { const e = eio(s), A = [lerp(top[0][0], bot[0][0], e), lerp(top[0][1], bot[0][1], e)], B = [lerp(top[1][0], bot[1][0], e), lerp(top[1][1], bot[1][1], e)];
+    ctx.shadowBlur = 10; ctx.strokeStyle = C.cyan; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); }
+  ctx.globalAlpha *= lock; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(c[0], c[1], 10, 0, Math.PI * 2); ctx.stroke();
+  font(500, VERT ? 24 : 19, '"JBM", monospace'); ctx.letterSpacing = '4px'; ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.fillStyle = C.cyan; ctx.fillText(labelA, tl[0], tl[1] - 16);
+  if (labelB) { ctx.textAlign = 'right'; ctx.fillStyle = C.mag; ctx.fillText(labelB, br[0], br[1] + (VERT ? 40 : 34)); }
   ctx.restore();
 }
 function logoRect() { return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => { const v = V3(x * LW / 2, y * LH / 2, 0).applyMatrix4(LOGO.matrixWorld).project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; }); }
