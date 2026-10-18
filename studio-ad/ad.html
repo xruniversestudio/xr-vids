@@ -309,17 +309,25 @@ function svcCam(u, { a0 = .16, a1 = -.12, lx = 0, len = 4.8 } = {}) {
    A canvas drawn every frame and warped onto the screen quad of a card (corners
    measured per image, in image fractions), so app content plays INSIDE the
    device: camera views, try-on, lenses. */
-function roundMask(cw, ch, r) { const c = document.createElement('canvas'); c.width = cw; c.height = ch; const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cw, ch); g.fillStyle = '#fff'; g.beginPath(); g.roundRect(3, 3, cw - 6, ch - 6, r); g.fill(); return new THREE.CanvasTexture(c); }
+/* homography taking the unit square (0,0)(1,0)(1,1)(0,1) to quad corners TL TR BR BL; returns [h0..h7] (h8 = 1) */
+function homography(Q) {
+  const src = [[0, 0], [1, 0], [1, 1], [0, 1]], A = [], B = [];
+  for (let i = 0; i < 4; i++) { const [x, y] = src[i], [X, Y] = Q[i]; A.push([x, y, 1, 0, 0, 0, -x * X, -y * X]); B.push(X); A.push([0, 0, 0, x, y, 1, -x * Y, -y * Y]); B.push(Y); }
+  for (let c = 0; c < 8; c++) { let piv = c; for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r; [A[c], A[piv]] = [A[piv], A[c]]; [B[c], B[piv]] = [B[piv], B[c]];
+    for (let r = 0; r < 8; r++) if (r !== c) { const f = A[r][c] / A[c][c]; for (let k = c; k < 8; k++) A[r][k] -= f * A[c][k]; B[r] -= f * B[c]; } }
+  return B.map((b, i) => b / A[i][i]);
+}
+function roundMask(cw, ch, r) { const c = document.createElement('canvas'); c.width = cw; c.height = ch; const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cw, ch); g.fillStyle = '#fff'; g.beginPath(); g.roundRect(1, 1, cw - 2, ch - 2, r); g.fill(); return new THREE.CanvasTexture(c); }
 class Screen {
   constructor(card, quad, cw, ch, radius = 28, base = null) {
     this.cv = document.createElement('canvas'); this.cv.width = cw; this.cv.height = ch; this.g = this.cv.getContext('2d'); this.radius = radius;
     this.tex = new THREE.CanvasTexture(this.cv); this.tex.colorSpace = THREE.SRGBColorSpace; this.tex.anisotropy = 8;
-    const cxq = quad.reduce((a, q) => a + q[0], 0) / 4, cyq = quad.reduce((a, q) => a + q[1], 0) / 4, inset = .985; // pull 1.5% inside the device bezel
-    const geo = new THREE.PlaneGeometry(1, 1, 12, 12), p = geo.attributes.position, Cq = quad.map(([fx, fy]) => [(cxq + (fx - cxq) * inset - .5) * card.w, (1 - (cyq + (fy - cyq) * inset)) * card.h - card.pad]);
-    for (let i = 0; i < p.count; i++) { const u = p.getX(i) + .5, v = .5 - p.getY(i), tx = lerp(Cq[0][0], Cq[1][0], u), ty = lerp(Cq[0][1], Cq[1][1], u), bx = lerp(Cq[3][0], Cq[2][0], u), by = lerp(Cq[3][1], Cq[2][1], u); p.setXYZ(i, lerp(tx, bx, v), lerp(ty, by, v), .004); }
+    // the screen quad (corners at the inner edge of the bezel, fitted per image) mapped with a true perspective homography
+    const geo = new THREE.PlaneGeometry(1, 1, 16, 16), p = geo.attributes.position, Cq = quad.map(([fx, fy]) => [(fx - .5) * card.w, (1 - fy) * card.h - card.pad]), Hm = homography(Cq);
+    for (let i = 0; i < p.count; i++) { const u = p.getX(i) + .5, v = .5 - p.getY(i), d = Hm[6] * u + Hm[7] * v + 1; p.setXYZ(i, (Hm[0] * u + Hm[1] * v + Hm[2]) / d, (Hm[3] * u + Hm[4] * v + Hm[5]) / d, .004); }
     const mask = roundMask(cw, ch, radius);
-    if (base) { this.bmat = new THREE.MeshBasicMaterial({ map: base, alphaMap: mask, transparent: true, depthWrite: false, opacity: 0 }); this.bmesh = new THREE.Mesh(geo, this.bmat); card.pivot.add(this.bmesh); }
-    this.mat = new THREE.MeshBasicMaterial({ map: this.tex, alphaMap: mask, transparent: true, depthWrite: false, opacity: 0 }); this.mesh = new THREE.Mesh(geo, this.mat); card.pivot.add(this.mesh);
+    if (base) { this.bmat = new THREE.MeshBasicMaterial({ map: base, alphaMap: mask, transparent: true, depthWrite: false, opacity: 0 }); this.bmesh = new THREE.Mesh(geo, this.bmat); this.bmesh.renderOrder = 1; card.pivot.add(this.bmesh); }
+    this.mat = new THREE.MeshBasicMaterial({ map: this.tex, alphaMap: mask, transparent: true, depthWrite: false, opacity: 0 }); this.mesh = new THREE.Mesh(geo, this.mat); this.mesh.renderOrder = 2; card.pivot.add(this.mesh);
   }
   begin() { const { g, cv, radius: r } = this; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.clearRect(0, 0, cv.width, cv.height); g.save(); g.beginPath(); g.roundRect(0, 0, cv.width, cv.height, r); g.clip(); return g; }
   end(op) { this.g.restore(); this.tex.needsUpdate = true; this.mat.opacity = op; this.mesh.visible = op > .001; if (this.bmat) { this.bmat.opacity = op; this.bmesh.visible = op > .001; } }
@@ -368,7 +376,7 @@ function scene1(G) { // AR with an image target: a real platform carries the pri
   const PRAD = .95, PH = .28, plx = P(1.0, 1.0), plz = P(-.8, -1.3);
   const phone = new Card('P01_phone', P(2.9, 2.75), G), sh = blob(G, 1.8, .6);
   const rt = new THREE.WebGLRenderTarget(480, 1120, { samples: 4 }), pcam = new THREE.PerspectiveCamera(46, 480 / 1120, .05, 120); pcam.layers.enable(1);
-  const scr = new Screen(phone, IMG.P01_phone.meta.screen, 480, 1120, 64, rt.texture);
+  const scr = new Screen(phone, IMG.P01_phone.meta.screen, 480, 1120, 70, rt.texture);
   // the physical platform (seen by both cameras)
   const plat = new THREE.Group(); plat.position.set(plx, 0, plz); G.add(plat);
   const pearl = new THREE.MeshPhysicalMaterial({ color: 0x9d8fc0, roughness: .38, metalness: .1, clearcoat: .6, clearcoatRoughness: .25, sheen: .3, sheenColor: new THREE.Color(0xb9a6ff), envMapIntensity: .3 });
@@ -439,7 +447,7 @@ function scene2(G) { // interactive exhibitions & events
 function scene3(G) { // AR mirror: she stands in front of it in her own clothes; only her reflection changes outfits. Then the same on a phone.
   const mirror = new Card('M01_ar_mirror', P(3.55, 3.75), G, { refl: true }), girl = new Card('A06_body_back', P(3.3, 3.35), G, { refl: true });
   const phone = new Card('P01_phone', P(2.3, 1.9), G), sh = blob(G, 1.6, .55);
-  const ms = new Screen(mirror, IMG.M01_ar_mirror.meta.screen, 480, 2060, 46), ps = new Screen(phone, IMG.P01_phone.meta.screen, 520, 1100, 70);
+  const ms = new Screen(mirror, IMG.M01_ar_mirror.meta.screen, 480, 2060, 58), ps = new Screen(phone, IMG.P01_phone.meta.screen, 520, 1100, 74);
   const rib = new Ribbon(G, swirl(V3(P(-.2, -.1), 0, 0), P(2.4, 1.8), 1.4, .4, 3.1, { dir: -1 }), { cA: RIB[2][0], cB: RIB[2][1], width: .26, turns: 1.2 }), mo = motes(G, 60, 37, [5, 4, 3]);
   const LOOKS = ['A01_body_base', 'A02_body_outfit1', 'A03_body_outfit2'];
   const SWAP = [2.5, 4.1]; // outfit changes (tap at -0.35 s)
@@ -495,7 +503,7 @@ function scene4(G) { // immersive cultural & spatial storytelling
 }
 function scene5(G) { // lenses & effects: the selfie camera tracks her face, then the lens is applied
   const phone = new Card('F02_selfie_phone', P(4.1, 3.95), G, { refl: true }), icons = new Card('F03_effect_icons', P(2.0, 1.45), G), sh = blob(G, 1.8, .6);
-  const scr = new Screen(phone, IMG.F02_selfie_phone.meta.screen, 560, 1240, 64);
+  const scr = new Screen(phone, IMG.F02_selfie_phone.meta.screen, 560, 1240, 58);
   const rib = new Ribbon(G, swirl(V3(P(-.6, 0), 0, 0), P(2.4, 1.8), 1.3, .3, 3.0, { dir: -1 }), { cA: RIB[0][0], cB: RIB[1][0], width: .26, turns: -1.3 }), mo = motes(G, 70, 71, [5, 4, 3]);
   return (u, t) => {
     const len = LEN(5); svcCam(u, { a0: .16, a1: -.12, len }); mo.set(u);
