@@ -392,47 +392,46 @@ function makeTarget() {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
 function scene1(G) { // AR with an image target: a real platform carries the printed tracker; the phone's camera finds it and the product appears on it — only on screen
-  const PRAD = .95, PH = .28, plx = P(1.0, 1.0), plz = P(-.8, -1.3);
-  const phone = new Card('P01_phone', P(2.9, 2.75), G), sh = blob(G, 1.8, .6);
-  const rt = new THREE.WebGLRenderTarget(480, 1120, { samples: 4 }), pcam = new THREE.PerspectiveCamera(46, 480 / 1120, .05, 120); pcam.layers.enable(1);
+  const plx = P(1.0, 1.0), plz = P(-.8, -1.3), TG = IMG.P03_platform.meta.target;
+  const phone = new Card('P01_phone', P(2.9, 2.75), G), sh = blob(G, 1.8, .6), plat = new Card('P03_platform', P(2.1, 2.0), G, { refl: true });
+  const rt = new THREE.WebGLRenderTarget(480, 1120, { samples: 4 }), pcam = new THREE.PerspectiveCamera(54, 480 / 1120, .05, 120); pcam.layers.enable(1);
   const scr = new Screen(phone, IMG.P01_phone.meta.screen, 480, 1120, 8, rt.texture, IMG.P01_phone.mask);
-  // the physical platform (seen by both cameras)
-  const plat = new THREE.Group(); plat.position.set(plx, 0, plz); G.add(plat);
-  const pearl = new THREE.MeshPhysicalMaterial({ color: 0x9d8fc0, roughness: .38, metalness: .1, clearcoat: .6, clearcoatRoughness: .25, sheen: .3, sheenColor: new THREE.Color(0xb9a6ff), envMapIntensity: .3 });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(PRAD, PRAD * 1.05, PH, 120, 1, true), pearl); body.position.y = PH / 2; body.castShadow = true; plat.add(body);
-  const lip = new THREE.Mesh(new THREE.TorusGeometry(PRAD, .03, 16, 160), pearl); lip.rotation.x = Math.PI / 2; lip.position.y = PH; plat.add(lip);
-  for (const [r, y, col] of [[PRAD * 1.052, .035, 0xE2367A], [PRAD * 1.03, PH * .55, 0x4FC3E0]]) { const n = new THREE.Mesh(new THREE.TorusGeometry(r, .009, 8, 160), new THREE.MeshBasicMaterial({ color: col })); n.rotation.x = Math.PI / 2; n.position.y = y; plat.add(n); }
-  const tgt = makeTarget(), top = new THREE.Mesh(new THREE.CircleGeometry(PRAD, 120), new THREE.MeshStandardMaterial({ map: tgt, roughness: .55, color: 0xb8b0c8, emissive: 0xffffff, emissiveMap: tgt, emissiveIntensity: .08 })); top.rotation.x = -Math.PI / 2; top.position.y = PH + .002; plat.add(top);
-  const psh = blob(G, 2.6, 2.6); psh.position.set(plx, .004, plz); psh.material.opacity = .55;
   // AR content: rendered only by the phone camera (layer 1)
   const ar = new THREE.Group(); G.add(ar);
-  const perf = new Card('P02_product', 1.55, ar), halo = holoRing(ar, PRAD * .82);
+  const perf = new Card('P02_product', 1.2, ar);
   const fl = new THREE.Mesh(new THREE.CircleGeometry(5, 64), new THREE.MeshStandardMaterial({ color: 0x150f2b, roughness: .35, metalness: .3, transparent: true, alphaMap: blobTex, opacity: .95 })); fl.rotation.x = -Math.PI / 2; fl.position.set(plx, .001, plz); ar.add(fl);
   ar.traverse(o => o.layers.set(1));
   const rib = new Ribbon(G, swirl(V3(P(-.1, -.05), 0, .35), P(2.7, 2.0), P(2.1, 2.3), .3, 2.8, { dir: -1 }), { cA: RIB[0][0], cB: RIB[0][1], width: .28, turns: 1.2 }), mo = motes(G, 60, 11, [5, 4, 3]);
+  // target ellipse (image fractions) -> world points on the platform card
+  const tgtPts = () => { plat.root.updateMatrixWorld(true); const r = TG.ang * Math.PI / 180, out = [];
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, ex = Math.cos(a) * TG.a, ey = Math.sin(a) * TG.b, fx = TG.cx + ex * Math.cos(r) - ey * Math.sin(r) * plat.h / plat.w, fy = TG.cy + ex * Math.sin(r) * plat.w / plat.h + ey * Math.cos(r);
+      out.push(V3((fx - .5) * plat.w, (1 - fy) * plat.h - plat.pad, 0).applyMatrix4(plat.mesh.matrixWorld)); } return out; };
+  const centre = () => { plat.root.updateMatrixWorld(true); return V3((TG.cx - .5) * plat.w, (1 - TG.cy) * plat.h - plat.pad, 0).applyMatrix4(plat.mesh.matrixWorld); };
   const proj = v => { const q = v.clone().project(pcam); return [(q.x + 1) / 2 * 480, (1 - q.y) / 2 * 1120]; };
   return (u, t) => {
     const len = LEN(1); svcCam(u, { a0: .16, a1: -.12, len }); mo.set(u);
     const px = P(-1.25, -.75), py = P(.45, .4) + .04 * Math.sin(u * 1.8), pz = P(1.5, 1.7);
     phone.set({ x: px, y: py, z: pz, rev: eio(pr(u, .1, .9)), rz: .02 * Math.sin(u * 1.1), face: .9 });
     sh.position.set(px, .004, pz); sh.material.opacity = .7;
+    plat.set({ x: plx, y: 0, z: plz, rev: eio(pr(u, .2, 1.0)), face: 1 });
     // the phone's camera: from the phone, aimed at the platform (hand drift)
-    pcam.position.set(px + .05 * Math.sin(u * .9), py + phone.h * .55, pz); pcam.lookAt(plx + .06 * Math.sin(u * .7), PH + .55, plz); pcam.updateMatrixWorld(true);
-    // AR content on the target
+    pcam.position.set(px + .05 * Math.sin(u * .9), py + phone.h * .55, pz); pcam.lookAt(plx + .06 * Math.sin(u * .7), .95, plz); pcam.updateMatrixWorld(true);
     const found = pr(u, 1.55, 1.9), appear = pr(u, 1.9, 2.6), b = eo5(appear), pop = 1 + .14 * Math.sin(appear * Math.PI) * (1 - appear);
-    perf.set({ x: plx, y: PH + .01, z: plz, s: Math.max(.001, b * pop), op: appear > 0 ? 1 : 0, rz: .04 * Math.sin(u * 1.5) * b });
-    perf.root.rotation.y = Math.atan2(pcam.position.x - plx, pcam.position.z - plz);
-    halo.position.set(plx, PH + .012, plz); halo.set(found * (1 - .5 * pr(u, 2.6, 3.2)), u);
-    // render the live camera feed (phone itself hidden, studio image as the room behind)
+    // live camera feed: the platform faces the phone camera (same render, seen from the phone), product on the target centre
+    plat.root.rotation.y = Math.atan2(pcam.position.x - plx, pcam.position.z - plz);
+    const c0 = centre(), toCam = pcam.position.clone().sub(c0).normalize();
+    perf.set({ x: c0.x + toCam.x * .08, y: c0.y - .02, z: c0.z + toCam.z * .08, s: Math.max(.001, b * pop), op: appear > 0 ? 1 : 0, rz: .04 * Math.sin(u * 1.5) * b });
+    perf.root.rotation.y = Math.atan2(pcam.position.x - perf.root.position.x, pcam.position.z - perf.root.position.z);
     const keepBg = scene.background; phone.root.visible = false; BGP.visible = false; rib.mesh.visible = false; mo.visible = false; scene.background = IMG.BG01_studio_vertical.tex;
     renderer.setRenderTarget(rt); renderer.render(scene, pcam); renderer.setRenderTarget(null);
+    const pts = tgtPts().map(proj), pc = proj(c0.clone().add(V3(0, .7, 0)));
     scene.background = keepBg; phone.root.visible = true; BGP.visible = true; mo.visible = true; rib.show(.55 * eio(pr(u, 2.4, len)), eo(pr(u, .3, 2.8)));
+    plat.root.rotation.y = Math.atan2(camera.position.x - plx, camera.position.z - plz); // back to facing the viewer
     // app UI over the feed
     const g = scr.begin(), cw = 480, ch = 1120;
-    const pts = [[PRAD, 0], [-PRAD, 0], [0, PRAD], [0, -PRAD]].map(([dx, dz]) => proj(V3(plx + dx, PH, plz + dz)));
     const tx0 = Math.min(...pts.map(q => q[0])) - 14, tx1 = Math.max(...pts.map(q => q[0])) + 14, ty0 = Math.min(...pts.map(q => q[1])) - 14, ty1 = Math.max(...pts.map(q => q[1])) + 14;
     const scan = pr(u, .9, 1.55), fk = eo5(found);
-    if (scan > 0) { // search frame closes onto the target, then locks
+    if (scan > 0) {
       const bx0 = lerp(70, tx0, fk), bx1 = lerp(cw - 70, tx1, fk), by0 = lerp(ch * .3, ty0, fk), by1 = lerp(ch * .72, ty1, fk), L = Math.min(bx1 - bx0, by1 - by0) * .22;
       g.save(); g.globalAlpha = eo(pr(u, .9, 1.1)) * (1 - pr(u, 2.9, 3.3)); g.strokeStyle = found > 0 ? C.cyan : '#ffffff'; g.lineWidth = 6; g.lineCap = 'round'; g.lineJoin = 'round'; g.shadowColor = C.cyan; g.shadowBlur = found > 0 ? 14 : 0;
       for (const [x, y, sx, sy] of [[bx0, by0, 1, 1], [bx1, by0, -1, 1], [bx1, by1, -1, -1], [bx0, by1, 1, -1]]) { g.beginPath(); g.moveTo(x, y + sy * L); g.arcTo(x, y, x + sx * L, y, L * .45); g.lineTo(x + sx * L, y); g.stroke(); }
@@ -441,13 +440,12 @@ function scene1(G) { // AR with an image target: a real platform carries the pri
       const label = found > 0 ? 'TARGET FOUND ✓' : 'SCAN THE TARGET', lw = found > 0 ? 300 : 320;
       g.save(); g.globalAlpha = eo(pr(u, .9, 1.1)) * (1 - pr(u, 2.6, 2.9)); pill(g, cw / 2 - lw / 2, ch - 250, lw, 54, 'rgba(10,8,24,.6)', found > 0 ? C.cyan : 'rgba(255,255,255,.6)'); uiFont(g, 700, 24); g.textAlign = 'center'; g.fillStyle = found > 0 ? C.cyan : '#fff'; g.fillText(label, cw / 2, ch - 214); g.restore();
     }
-    const pc = proj(V3(plx, PH + .8, plz)); sparkles(g, pc[0], pc[1], 220, pr(u, 1.9, 2.8), 31);
-    g.save(); g.globalAlpha = pr(u, 2.7, 3.1); pill(g, cw / 2 - 100, 120, 200, 50, 'rgba(10,8,24,.55)', rgba(C.cyan, .9)); uiFont(g, 700, 22); g.textAlign = 'center'; g.fillStyle = C.cyan; g.fillText('3D · 360°', cw / 2, 153); g.restore();
+    sparkles(g, pc[0], pc[1], 220, pr(u, 1.9, 2.8), 31);
+    g.save(); g.globalAlpha = pr(u, 2.7, 3.1); pill(g, cw / 2 - 100, 130, 200, 50, 'rgba(10,8,24,.55)', rgba(C.cyan, .9)); uiFont(g, 700, 22); g.textAlign = 'center'; g.fillStyle = C.cyan; g.fillText('3D · 360°', cw / 2, 163); g.restore();
     g.save(); uiFont(g, 700, 20); g.fillStyle = 'rgba(255,255,255,.85)'; g.textAlign = 'left'; g.fillText('● AR CAMERA', 70, 86); g.restore();
     g.save(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 6; g.beginPath(); g.arc(cw / 2, ch - 105, 42, 0, 6.283); g.stroke(); g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(cw / 2, ch - 105, 33, 0, 6.283); g.fill(); g.restore();
     scr.end(eo(pr(u, .6, 1.0)));
-    rib.show(.55 * eio(pr(u, 2.4, len)), eo(pr(u, .3, 2.8)));
-    const tp = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, c2]) => { const v = V3(plx + a * PRAD, PH, plz + c2 * PRAD * .5).project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; });
+    const tp = tgtPts().map(v => { const q = v.project(camera); return [(q.x + 1) / 2 * W, (1 - q.y) / 2 * H]; });
     return [{ c: tp, k: pr(u, .9, 1.5) * (1 - pr(u, 2.2, 2.5)), a: 'IMAGE TARGET', b: null },
             { c: phone.rect(.23, .03, .76, .91), k: pr(u, 2.5, 3.1), a: 'AR · WEBAR', b: '● PLACED' }];
   };
