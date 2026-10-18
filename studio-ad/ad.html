@@ -338,13 +338,13 @@ function homography(Q) {
 }
 function roundMask(cw, ch, r) { const c = document.createElement('canvas'); c.width = cw; c.height = ch; const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cw, ch); g.fillStyle = '#fff'; g.beginPath(); g.roundRect(1, 1, cw - 2, ch - 2, r); g.fill(); return new THREE.CanvasTexture(c); }
 class Screen {
-  constructor(card, quad, cw, ch, radius = 28, base = null) {
+  constructor(card, quad, cw, ch, radius = 28, base = null, maskTex = null) {
     this.cv = document.createElement('canvas'); this.cv.width = cw; this.cv.height = ch; this.g = this.cv.getContext('2d'); this.radius = radius;
     this.tex = new THREE.CanvasTexture(this.cv); this.tex.colorSpace = THREE.SRGBColorSpace; this.tex.anisotropy = 8;
     // the screen quad (corners at the inner edge of the bezel, fitted per image) mapped with a true perspective homography
     const geo = new THREE.PlaneGeometry(1, 1, 16, 16), p = geo.attributes.position, Cq = quad.map(([fx, fy]) => [(fx - .5) * card.w, (1 - fy) * card.h - card.pad]), Hm = homography(Cq);
     for (let i = 0; i < p.count; i++) { const u = p.getX(i) + .5, v = .5 - p.getY(i), d = Hm[6] * u + Hm[7] * v + 1; p.setXYZ(i, (Hm[0] * u + Hm[1] * v + Hm[2]) / d, (Hm[3] * u + Hm[4] * v + Hm[5]) / d, .004); }
-    const mask = roundMask(cw, ch, radius);
+    const mask = maskTex || roundMask(cw, ch, radius); // exact glass shape (from the device image) when available
     if (base) { this.bmat = new THREE.MeshBasicMaterial({ map: base, alphaMap: mask, transparent: true, depthWrite: false, opacity: 0 }); this.bmesh = new THREE.Mesh(geo, this.bmat); this.bmesh.renderOrder = 1; card.pivot.add(this.bmesh); }
     this.mat = new THREE.MeshBasicMaterial({ map: this.tex, alphaMap: mask, transparent: true, depthWrite: false, opacity: 0 }); this.mesh = new THREE.Mesh(geo, this.mat); this.mesh.renderOrder = 2; card.pivot.add(this.mesh);
   }
@@ -395,7 +395,7 @@ function scene1(G) { // AR with an image target: a real platform carries the pri
   const PRAD = .95, PH = .28, plx = P(1.0, 1.0), plz = P(-.8, -1.3);
   const phone = new Card('P01_phone', P(2.9, 2.75), G), sh = blob(G, 1.8, .6);
   const rt = new THREE.WebGLRenderTarget(480, 1120, { samples: 4 }), pcam = new THREE.PerspectiveCamera(46, 480 / 1120, .05, 120); pcam.layers.enable(1);
-  const scr = new Screen(phone, IMG.P01_phone.meta.screen, 480, 1120, 70, rt.texture);
+  const scr = new Screen(phone, IMG.P01_phone.meta.screen, 480, 1120, 8, rt.texture, IMG.P01_phone.mask);
   // the physical platform (seen by both cameras)
   const plat = new THREE.Group(); plat.position.set(plx, 0, plz); G.add(plat);
   const pearl = new THREE.MeshPhysicalMaterial({ color: 0x9d8fc0, roughness: .38, metalness: .1, clearcoat: .6, clearcoatRoughness: .25, sheen: .3, sheenColor: new THREE.Color(0xb9a6ff), envMapIntensity: .3 });
@@ -443,7 +443,7 @@ function scene1(G) { // AR with an image target: a real platform carries the pri
     }
     const pc = proj(V3(plx, PH + .8, plz)); sparkles(g, pc[0], pc[1], 220, pr(u, 1.9, 2.8), 31);
     g.save(); g.globalAlpha = pr(u, 2.7, 3.1); pill(g, cw / 2 - 100, 120, 200, 50, 'rgba(10,8,24,.55)', rgba(C.cyan, .9)); uiFont(g, 700, 22); g.textAlign = 'center'; g.fillStyle = C.cyan; g.fillText('3D · 360°', cw / 2, 153); g.restore();
-    g.save(); uiFont(g, 700, 20); g.fillStyle = 'rgba(255,255,255,.85)'; g.textAlign = 'left'; g.fillText('● AR CAMERA', 46, 72); g.restore();
+    g.save(); uiFont(g, 700, 20); g.fillStyle = 'rgba(255,255,255,.85)'; g.textAlign = 'left'; g.fillText('● AR CAMERA', 70, 86); g.restore();
     g.save(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 6; g.beginPath(); g.arc(cw / 2, ch - 105, 42, 0, 6.283); g.stroke(); g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(cw / 2, ch - 105, 33, 0, 6.283); g.fill(); g.restore();
     scr.end(eo(pr(u, .6, 1.0)));
     rib.show(.55 * eio(pr(u, 2.4, len)), eo(pr(u, .3, 2.8)));
@@ -466,7 +466,7 @@ function scene2(G) { // interactive exhibitions & events
 function scene3(G) { // AR mirror: she stands in front of it in her own clothes; only her reflection changes outfits. Then the same on a phone.
   const mirror = new Card('M01_ar_mirror', P(3.55, 3.75), G, { refl: true }), girl = new Card('A06_body_back', P(3.3, 3.35), G, { refl: true });
   const phone = new Card('P01_phone', P(2.3, 1.9), G), sh = blob(G, 1.6, .55);
-  const ms = new Screen(mirror, IMG.M01_ar_mirror.meta.screen, 480, 2060, 58), ps = new Screen(phone, IMG.P01_phone.meta.screen, 520, 1100, 74);
+  const ms = new Screen(mirror, IMG.M01_ar_mirror.meta.screen, 480, 2060, 8, null, IMG.M01_ar_mirror.mask), ps = new Screen(phone, IMG.P01_phone.meta.screen, 480, 1120, 8, null, IMG.P01_phone.mask);
   const rib = new Ribbon(G, swirl(V3(P(-.2, -.1), 0, 0), P(2.4, 1.8), 1.4, .4, 3.1, { dir: -1 }), { cA: RIB[2][0], cB: RIB[2][1], width: .26, turns: 1.2 }), mo = motes(G, 60, 37, [5, 4, 3]);
   const LOOKS = ['A01_body_base', 'A02_body_outfit1', 'A03_body_outfit2'];
   const SWAP = [2.5, 4.1]; // outfit changes (tap at -0.35 s)
@@ -500,8 +500,8 @@ function scene3(G) { // AR mirror: she stands in front of it in her own clothes;
     const pk = eo5(pr(u, 4.7, 5.5)), ppx = lerp(P(4.6, 3.2), P(2.35, 1.3), pk), ppy = P(.5, .35) + .05 * Math.sin(u * 2);
     phone.set({ x: ppx, y: ppy, z: P(1.5, 1.9), op: pk > 0 ? 1 : 0, rz: lerp(.3, .04, pk) });
     sh.position.set(ppx, .004, P(1.5, 1.9)); sh.material.opacity = .5 * pk;
-    const pg = ps.begin(); tryOn(pg, 520, 1100, u, t, { figH: 1500, by: 1450, chips: false, track: false });
-    pg.save(); uiFont(pg, 700, 24); pg.fillStyle = 'rgba(255,255,255,.85)'; pg.textAlign = 'center'; pg.fillText('VIRTUAL TRY-ON', 260, 80); pg.restore();
+    const pg = ps.begin(); tryOn(pg, 480, 1120, u, t, { figH: 1500, by: 1470, chips: false, track: false });
+    pg.save(); uiFont(pg, 700, 24); pg.fillStyle = 'rgba(255,255,255,.85)'; pg.textAlign = 'center'; pg.fillText('VIRTUAL TRY-ON', 240, 1070); pg.restore();
     ps.end(pk);
     rib.show(.55 * eio(pr(u, 3.0, len)), eo(pr(u, .3, 3.0)));
     return [{ c: mirror.rect(...[.32, .05, .67, .85]), k: pr(u, 1.0, 1.6) * (1 - pr(u, 4.4, 4.7)), a: 'BODY TRACKING', b: '● LIVE' },
@@ -522,7 +522,7 @@ function scene4(G) { // immersive cultural & spatial storytelling
 }
 function scene5(G) { // lenses & effects: the selfie camera tracks her face, then the lens is applied
   const phone = new Card('F02_selfie_phone', P(4.1, 3.95), G, { refl: true }), icons = new Card('F03_effect_icons', P(2.0, 1.45), G), sh = blob(G, 1.8, .6);
-  const scr = new Screen(phone, IMG.F02_selfie_phone.meta.screen, 560, 1240, 58);
+  const scr = new Screen(phone, IMG.F02_selfie_phone.meta.screen, 560, 1240, 8, null, IMG.F02_selfie_phone.mask);
   const rib = new Ribbon(G, swirl(V3(P(-.6, 0), 0, 0), P(2.4, 1.8), 1.3, .3, 3.0, { dir: -1 }), { cA: RIB[0][0], cB: RIB[1][0], width: .26, turns: -1.3 }), mo = motes(G, 70, 71, [5, 4, 3]);
   return (u, t) => {
     const len = LEN(5); svcCam(u, { a0: .16, a1: -.12, len }); mo.set(u);
@@ -657,6 +657,7 @@ window.__dbg = () => ({ groups: GROUPS.map(g => g.visible), wipe: WIPE.mesh.visi
   await Promise.all(names.map(async n => { const tex = await L.loadAsync(`images/${n}.png`); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; IMG[n] = { tex, meta: meta[n] }; }));
   const mk = await L.loadAsync('brand/xr_mark_1024.png'); mk.colorSpace = THREE.SRGBColorSpace; mk.anisotropy = 8; buildLogo(mk);
   IMG.mark = { tex: mk, meta: { w: mk.image.width, h: mk.image.height, bot: 0 } };
+  await Promise.all(['P01_phone', 'F02_selfie_phone', 'M01_ar_mirror'].map(async n => { IMG[n].mask = await L.loadAsync(`images/masks/${n}.png`); }));
   buildBackdrop(IMG[VERT ? 'BG01_studio_vertical' : 'BG02_studio_horizontal'].tex);
   BUILD.forEach(b => { const G = new THREE.Group(); scene.add(G); GROUPS.push(G); SC.push(b(G)); if (G.userData.init) G.userData.init(); });
   window.READY = true;
