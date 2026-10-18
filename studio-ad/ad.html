@@ -272,8 +272,11 @@ class Ribbon {
   }
 }
 /* a band that enters from off-frame, circles a centre (behind, then in front) while rising, and leaves */
-function swirl(c, rx, rz, y0, y1, { turns = 1.15, a0 = Math.PI, dir = 1, n = 12 } = {}) {
-  // enter and leave along the circle's own tangent, so the band never turns tighter than its width
+function swirl(c, rx, rz, y0, y1, { turns = 1.15, dir = 1, n = 12 } = {}) {
+  // start at the FRONT of the loop (towards the camera) where the tangent is sideways, so the band sweeps in from the
+  // side of the frame, never out of an object; whole or half turns, so it also leaves sideways (in front or behind)
+  // and always along the circle's own tangent — the band never turns tighter than its width
+  const a0 = Math.PI / 2; turns = Math.max(1, Math.round(turns * 2) / 2);
   const at = u => { const a = a0 + dir * u * turns * Math.PI * 2; return V3(c.x + Math.cos(a) * rx, lerp(y0, y1, u), c.z + Math.sin(a) * rz); };
   const tan = u => at(Math.min(1, u + .002)).sub(at(Math.max(0, u - .002))).normalize();
   const p0 = at(0), t0 = tan(0), p1 = at(1), t1 = tan(1), pts = [p0.clone().addScaledVector(t0, -7), p0.clone().addScaledVector(t0, -3)];
@@ -406,7 +409,7 @@ function scene1(G) { // AR with an image target: a real platform carries the pri
   const perf = new Card('P02_product', 1.55, ar), halo = holoRing(ar, PRAD * .82);
   const fl = new THREE.Mesh(new THREE.CircleGeometry(5, 64), new THREE.MeshStandardMaterial({ color: 0x150f2b, roughness: .35, metalness: .3, transparent: true, alphaMap: blobTex, opacity: .95 })); fl.rotation.x = -Math.PI / 2; fl.position.set(plx, .001, plz); ar.add(fl);
   ar.traverse(o => o.layers.set(1));
-  const rib = new Ribbon(G, swirl(V3(P(-.2, 0), 0, 0), P(2.6, 1.9), 1.4, .3, 2.8, { dir: -1 }), { cA: RIB[0][0], cB: RIB[0][1], width: .28, turns: 1.2 }), mo = motes(G, 60, 11, [5, 4, 3]);
+  const rib = new Ribbon(G, swirl(V3(P(-.1, -.05), 0, .35), P(2.7, 2.0), P(2.1, 2.3), .3, 2.8, { dir: -1 }), { cA: RIB[0][0], cB: RIB[0][1], width: .28, turns: 1.2 }), mo = motes(G, 60, 11, [5, 4, 3]);
   const proj = v => { const q = v.clone().project(pcam); return [(q.x + 1) / 2 * 480, (1 - q.y) / 2 * 1120]; };
   return (u, t) => {
     const len = LEN(1); svcCam(u, { a0: .16, a1: -.12, len }); mo.set(u);
