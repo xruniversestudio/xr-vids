@@ -32,3 +32,6 @@ studio-ad/stills/
 studio-ad/logs/
 studio-ad/_wrap_*.html
 studio-ad/*.jpg
+studio-ad/out/*_test.mp4
+studio-ad/node_modules/
+studio-ad/package-lock.json

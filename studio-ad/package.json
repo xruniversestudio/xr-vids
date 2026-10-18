@@ -1,0 +1,17 @@
+{
+  "name": "xr-universe-studio-ad",
+  "private": true,
+  "description": "XR Universe Studio services film (Three.js, rendered headless with Playwright)",
+  "scripts": {
+    "setup": "npx playwright install chromium",
+    "render": "node render_all.js",
+    "render:v": "node render_all.js --only v",
+    "render:h": "node render_all.js --only h",
+    "test": "node render_all.js --only v --frames 60"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "playwright": "^1.56.1",
+    "three": "0.160.0"
+  }
+}
